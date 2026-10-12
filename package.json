@@ -1,0 +1,63 @@
+{
+  "name": "dsh-deepseek-web",
+  "description": "DeepSeek free web-channel adapter plugin: Host half (lib/index.js) drives chat.deepseek.com (and the Kimi/GLM review channels) via real browsers; client half (lib/client.js) keeps the conversation-view blank-recovery safeguard. Settings live in the plugin's own Config schema, projected into the built-in settings page.",
+  "version": "0.2.10",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "tools",
+    "dsh.patch.yml",
+    "cordis.yml",
+    "INSTALL.md",
+    "README.md"
+  ],
+  "meta": {
+    "title": "DeepSeek 网页版通道",
+    "description": "用 chat.deepseek.com 免费网页版驱动 dsh 的主通道，并可选接入 Kimi / GLM 独立审核。"
+  },
+  "dependencies": {
+    "playwright-core": "1.61.1"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-llm": "*",
+    "@deepseek-ai/schemastery": "~3.18.4",
+    "react": ">=18"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./dsh.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "npm run build:host && npm run build:client",
+    "build:host": "tsdown --config tsdown.host.config.ts --config-loader tsx",
+    "build:client": "tsdown --config tsdown.config.ts --config-loader tsx",
+    "test:parsers": "tsx tools/synthetic-parse-check.ts && tsx tools/kimi-parse-check.ts && tsx tools/kimi-gzip-check.ts && tsx tools/glm-parse-check.ts && tsx tools/action-repair-check.ts && tsx tools/review-evidence-check.ts && tsx tools/rate-limit-check.ts && tsx tools/usage-check.ts && tsx tools/handoff-check.ts",
+    "pack": "npm pack"
+  },
+  "devDependencies": {
+    "react": "^19.1.1",
+    "tsdown": "^0.15.4",
+    "tsx": "^4.20.3",
+    "typescript": "^5.9.3"
+  }
+}
