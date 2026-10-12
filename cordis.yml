@@ -1,0 +1,15 @@
+# 本地覆盖层：把 dsh-deepseek-web 插件挂进 dsh web 启动配置
+# 用法: dsh web --patch ./cordis.yml
+- insert:
+    - id: llm-deepseek-web
+      name: './src/index.ts'
+      config:
+        url: 'https://chat.deepseek.com'
+        browser: managed
+        channel: msedge
+        sendMode: manual
+        review:
+          # 默认关闭；需要时再打开审核
+          enabled: false
+          # 可选：deepseek-web / kimi / glm
+          provider: deepseek-web
