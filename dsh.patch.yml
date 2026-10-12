@@ -1,0 +1,19 @@
+# dsh-deepseek-web 发行包自带的 patch 层。
+#
+# 由 dsh 通过 package.json 的 dsh.bundle.patch 声明加载，也可以用
+# `dsh web --patch <本包目录>/dsh.patch.yml` 手动挂载。
+# 插件入口 name 用相对路径：dsh 会以本文件所在目录为锚解析，
+# 所以装到任何位置（包括 node_modules 内）都指向包内的 lib/index.js。
+#
+# 配置只写与默认值不同/需要显式声明的项；完整配置见插件 README。
+# 审核默认关闭，可改为 enabled: true（provider 支持 deepseek-web / kimi / glm）。
+- insert:
+    - id: llm-deepseek-web
+      name: './lib/index.js'
+      config:
+        url: 'https://chat.deepseek.com'
+        browser: managed
+        channel: msedge
+        sendMode: manual
+        review:
+          provider: deepseek-web
