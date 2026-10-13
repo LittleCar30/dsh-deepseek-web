@@ -174,6 +174,7 @@ export class DeepSeekSelfReviewer {
       : SELF_REVIEW_PROTOCOL
     const result = await this.channel.turn({
       sessionId: 'deepseek-self-review',
+      preserveConversation: true,
       model: 'deepseek-web',
       text,
       initialize: false,

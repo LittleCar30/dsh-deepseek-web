@@ -23,6 +23,7 @@ import {
   looksLikeIntendedToolReply,
   looksLikeTaskRequest,
   looksLikeToolDenial,
+  looksLikeUnfinishedHandoff,
   parseWebReply,
   repairAndValidateActions,
   replyChunks,
@@ -33,6 +34,7 @@ import {
   buildHandoffBrief,
   buildRecoveryPrompt,
   buildToolCatalog,
+  buildAuxiliaryPrompt,
   renderNewWebMessages,
   visibleToolsOf,
 } from './protocol.ts'
@@ -41,6 +43,7 @@ import { SessionRegistry, type ChannelTokenTotals, type WebChatState } from './s
 import type { ReviewVerdict } from './reviewer.ts'
 import os from 'node:os'
 import path from 'node:path'
+import { AsyncLock } from './async-lock.ts'
 
 /** 拆出委托动作（如 web_search/web_fetch）：本地校验与执行都不含它们。 */
 function splitDelegatedActions(
@@ -108,6 +111,8 @@ class TurnProgressPipe {
 }
 
 export class DeepSeekWebAdapter extends LlmAdapter {
+  private readonly requestLock = new AsyncLock()
+  private readonly replaySessions = new Set<string>()
   private readonly sessions: SessionRegistry
   private readonly config: Config
   private readonly channel: BrowserChannel
@@ -276,6 +281,69 @@ export class DeepSeekWebAdapter extends LlmAdapter {
   }
 
   async *stream(options: GenerateOptions): AsyncGenerator<StreamChunk> {
+    let release: (() => void) | undefined
+    try {
+      release = await this.requestLock.acquire(options.signal)
+      if (options.purpose !== undefined) {
+        yield* this.streamAuxiliary(options)
+      } else {
+        const sessionId = options.sessionId ?? 'anonymous'
+        let completed = false
+        try {
+          yield* this.streamTask(options)
+          completed = true
+          this.replaySessions.delete(sessionId)
+        } finally {
+          if (!completed) this.replaySessions.add(sessionId)
+        }
+      }
+    } finally {
+      release?.()
+    }
+  }
+
+  /** 摘要和标题是独立的一次性请求；不能解析成动作或进入普通会话状态机。 */
+  private async *streamAuxiliary(options: GenerateOptions): AsyncGenerator<StreamChunk> {
+    if (!normalizeWebModel(options.model)) throw new LlmError('未知网页模型', 'UNKNOWN_MODEL')
+    if (!this.channel.turnIsolated) {
+      throw new LlmError('当前浏览器通道不支持隔离辅助请求，请升级通道实现。', 'WEB_AUXILIARY_UNSUPPORTED')
+    }
+    await this.sessions.load()
+    const reply = await this.channel.turnIsolated({
+      sessionId: options.sessionId ?? 'anonymous',
+      model: options.model,
+      text: buildAuxiliaryPrompt(options),
+      initialize: true,
+      autoSend: options.model === 'deepseek-web-auto',
+      signal: options.signal,
+    })
+    options.signal?.throwIfAborted()
+    if (reply.contextLengthExceeded) {
+      throw new LlmError('辅助请求历史超过网页上下文上限；保留原任务，请配置独立摘要模型或缩小压缩范围。', 'CONTEXT_WINDOW_EXCEEDED')
+    }
+    if (reply.finishReason === 'interrupted') throw new LlmError('辅助请求被网页中断，摘要未提交。', 'WEB_REPLY_INTERRUPTED')
+    if (!reply.text.trim() && reply.finishReason !== 'max-tokens') {
+      throw new LlmError('辅助请求没有返回正文，摘要未提交。', 'WEB_EMPTY_RESPONSE')
+    }
+    if (reply.accumulatedUsage !== undefined && reply.accumulatedUsage > 0) {
+      const totals = this.sessions.addChannelTokens(reply.accumulatedUsage)
+      this.onUsage?.(totals)
+      await this.sessions.save()
+      yield { type: 'usage', usage: { inputTokens: 0, outputTokens: reply.accumulatedUsage, totalTokens: reply.accumulatedUsage } }
+    }
+    // 原样文本返回：即使摘要里包含 actions 示例，也不能变成可执行工具调用。
+    for (const chunk of replyChunks({ hasActions: false, actions: [], text: reply.text })) {
+      yield chunk.type === 'finish' && reply.finishReason === 'max-tokens'
+        ? { type: 'finish', reason: { kind: 'max-tokens' } } : chunk
+    }
+  }
+
+  private checkReplyEnd(reply: BrowserTurnResult): void {
+    if (reply.finishReason === 'interrupted') throw new LlmError('网页明确报告回复被中断，请重试当前任务。', 'WEB_REPLY_INTERRUPTED')
+    if (reply.finishReason === 'max-tokens') throw new LlmError('网页回复达到输出上限，未作为完整交付提交，请缩小单次任务后重试。', 'WEB_REPLY_TRUNCATED')
+  }
+
+  private async *streamTask(options: GenerateOptions): AsyncGenerator<StreamChunk> {
     const sessionId = options.sessionId ?? 'anonymous'
     await this.sessions.load()
     const model = options.model as WebModelId
@@ -290,10 +358,14 @@ export class DeepSeekWebAdapter extends LlmAdapter {
 
     await this.channel.ensureReady()
 
-    const state = this.sessions.for(sessionId)
+    const savedState = this.sessions.for(sessionId)
+    // 成功消费完整结果后才提交；失败或取消不能提前推进游标/同步标记。
+    const state = { ...savedState }
 
     const goalBefore = state.goalText
-    const rendered = renderNewWebMessages(options, state, this.config)
+    const forceReplay = this.replaySessions.has(sessionId)
+      || this.channel.isConversationActive?.(sessionId) === false
+    const rendered = renderNewWebMessages(options, state, this.config, forceReplay)
     if (state.goalText !== goalBefore) {
       // 新的用户任务：重置审核计数
       state.reviewRoundsUsed = 0
@@ -305,12 +377,11 @@ export class DeepSeekWebAdapter extends LlmAdapter {
       return
     }
 
-    // 乐观标记：首轮即将进入网页对话，先置 initialized 并落盘，
-    // 防止后续工具轮次因状态错位再次触发“开启新对话”。
-    if (rendered.prompt.initialize && !state.initialized) {
+    // 初始化只更新本轮快照；完整结果被消费后再提交持久状态。
+    if (rendered.prompt.initialize) {
       this.channel.resetConversationGate()
       state.initialized = true
-      await this.sessions.save()
+      state.usageBaseline = 0
     }
 
     // 需要人工/浏览器确认的轮次在 turn() 内部完成；异常时给出可诊断错误。
@@ -340,6 +411,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
       )
     }
 
+    this.checkReplyEnd(reply)
     let parsed = parseWebReply(reply.text)
     const visibleTools = visibleToolsOf(options, this.config)
     const allowedToolNames = new Set(visibleTools.map(tool => tool.name))
@@ -370,9 +442,12 @@ export class DeepSeekWebAdapter extends LlmAdapter {
      * 进程若在回合中途被杀，游标不会超前于 Harness 会话日志。
      */
     const advanceAndSave = async (): Promise<void> => {
-      state.lastMessageId = options.messages.at(-1)?.id
+      options.signal?.throwIfAborted()
+      const lastIdentified = [...options.messages].reverse().find(message => message.id)
+      state.lastMessageId = lastIdentified?.id
       state.roundsSinceProtocol = rendered.prompt.includeProtocol ? 0 : state.roundsSinceProtocol + 1
       state.lastReply = reply.text
+      Object.assign(savedState, state)
       await this.sessions.save()
     }
 
@@ -387,6 +462,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
           !parsed.hasActions
           && (
             looksLikeIntendedToolReply(reply.text)
+            || looksLikeUnfinishedHandoff(reply.text, state.goalText ?? '')
             || looksLikeTaskRequest(reply.text)
             || ((options.tools?.length ?? 0) > 0 && looksLikeToolDenial(reply.text))
           )
@@ -419,6 +495,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
       usageDeltaSum += this.accountUsage(correctedReply, state, false)
       usageObserved = usageObserved || correctedReply.accumulatedUsage !== undefined
       reply = correctedReply
+      this.checkReplyEnd(reply)
       parsed = parseWebReply(correctedReply.text)
       revalidate()
       correctedChars += correctedReply.text.length + reviewNote.length
@@ -473,6 +550,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
           )
         }
         usageDeltaSum += this.accountUsage(outcome, state, false)
+        this.checkReplyEnd(outcome)
         usageObserved = usageObserved || outcome.accumulatedUsage !== undefined
         const outcomeParsed = parseWebReply(outcome.text)
         // maxToolResultChars 只限制送入网页模型的工具结果，不截断用户收到的正文。
@@ -547,6 +625,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
         usageDeltaSum += this.accountUsage(revised, state, false)
         usageObserved = usageObserved || revised.accumulatedUsage !== undefined
         reply = revised
+        this.checkReplyEnd(reply)
         parsed = parseWebReply(revised.text)
         revalidate()
         correctedChars += revised.text.length + feedback.length
@@ -558,6 +637,10 @@ export class DeepSeekWebAdapter extends LlmAdapter {
     // 把审核结论附在最终正文末尾，让 Harness 对话里可见
     if (reviewSummary && !parsed.hasActions) {
       parsed = { ...parsed, text: `${parsed.text}\n\n---\n${reviewSummary}` }
+    }
+
+    if (!parsed.hasActions && looksLikeUnfinishedHandoff(parsed.text, state.goalText ?? '')) {
+      throw new LlmError('网页仍返回未完成的任务交接摘要，未作为最终交付提交；请重试当前任务。', 'WEB_UNFINISHED_HANDOFF')
     }
 
     // 网页对话（含审核）完全结束、正文即将交给 Harness 呈现给用户时：

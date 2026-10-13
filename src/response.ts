@@ -28,6 +28,19 @@ export interface ParsedWebReply {
   text: string
 }
 
+/** 只拦截明显的未完成交接文本；用户要求摘要/分析时允许正常输出。 */
+export function looksLikeUnfinishedHandoff(text: string, task: string): boolean {
+  if (!task || /总结|摘要|交接|分析|解释|summari[sz]e|summary|handoff|analy[sz]e|explain/i.test(task)) return false
+  const markers = [
+    /(?:^|\n)\s*-\s*User asked\b/i,
+    /(?:^|\n)\s*-\s*User wants\b/i,
+    /(?:^|\n)\s*-\s*Prior assistant\b/i,
+    /(?:^|\n)\s*##\s*Primary Request and Intent\b/i,
+    /(?:^|\n)\s*##\s*(?:Pending Jobs|Current Work|Next Step)\b/i,
+  ].filter(pattern => pattern.test(text)).length
+  return markers >= 3 && /NOT yet|not yet|pending|尚未|待办|未完成/i.test(text)
+}
+
 /** 本地审查发现的一条动作问题。 */
 export interface ActionProblem {
   /** 动作在 actions 数组中的序号。 */

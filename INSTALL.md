@@ -8,7 +8,7 @@
 ```bash
 npm install dsh-deepseek-web
 # 或
-npm install /path/to/dsh-deepseek-web-0.2.11.tgz
+npm install /path/to/dsh-deepseek-web-0.2.12.tgz
 ```
 
 建议把包安装在桌面版使用的 Node/npm 环境中，使 `@deepseek-ai/cordis`、
@@ -21,7 +21,7 @@ npm install /path/to/dsh-deepseek-web-0.2.11.tgz
 
 ```json
 {
-  "dependencies": { "dsh-deepseek-web": "^0.2.11" },
+  "dependencies": { "dsh-deepseek-web": "^0.2.12" },
   "dsh": { "profile": { "bundles": ["dsh-deepseek-web"] } }
 }
 ```
@@ -52,6 +52,16 @@ node node_modules/dsh-deepseek-web/tools/browser-keeper.mjs --port 9333
 0.2.11 起默认只输出最终正文或工具调用。若旧配置开启了实时思考流，升级后请在
 插件配置中关闭“显示网页思考过程”（`liveThinking: false`）。这只控制 dsh 展示，
 不改变网页思考模式；网页委托正文不再受 6000 字符的工具输入上限影响。
+
+0.2.12 修复内部英文交接摘要覆盖用户任务的问题。安装新版包后重启 dsh，继续原任务，
+插件会同步宿主历史并清理旧版明确的摘要指令污染；不需要删除会话状态文件。
+原任务已被宿主压缩移除时，按压缩检查点继续。若宿主历史缺少任务信息，请重新说明任务。
+
+内部摘要/标题请求会打开临时标签，完成、失败或取消后关闭，工作标签保持原对话。
+半自动模型仍需在临时标签点击发送；自动模型自动发送。内部请求不执行工具，也不参与交付审核。
+压缩完成后，工作标签会建立接续对话，接收检查点与近期消息。
+网页明确报告截断或中断时不会按正常完成提交；网站不报告原因时无法保证识别所有截断。
+更多恢复条件、限制与排查步骤见 README 的“0.2.12：上下文压缩与任务接续”。
 
 ## 4. 可选审核
 

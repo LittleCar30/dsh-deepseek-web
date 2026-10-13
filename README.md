@@ -11,6 +11,7 @@
 - 保留人工点击发送的确认点（`sendMode: manual`），避免插件自动替用户提交网页请求。
 - 将网页端正文、JSON 工具动作、频控和 token 用量转换回 dsh 格式；默认不展示思考过程。
 - 在上下文过长时建立新的网页对话，并携带任务简报继续执行。
+- 将 dsh 内部摘要/标题请求放到独立临时页面，压缩后恢复正常任务上下文。
 - 通过 dsh 的插件设置页修改配置；客户端侧提供配置页和对话视图空白自愈。
 - 可选在同一 DeepSeek 对话中自审，或通过独立浏览器窗口使用 Kimi / GLM 审核。
 
@@ -40,13 +41,13 @@ npm install dsh-deepseek-web
 从 Release 下载 `dsh-deepseek-web-*.tgz` 后，在 dsh 的插件或 profile 目录执行：
 
 ```bash
-npm install /path/to/dsh-deepseek-web-0.2.11.tgz
+npm install /path/to/dsh-deepseek-web-0.2.12.tgz
 ```
 
 Windows PowerShell 示例：
 
 ```powershell
-npm install .\dsh-deepseek-web-0.2.11.tgz
+npm install .\dsh-deepseek-web-0.2.12.tgz
 ```
 
 ### Desktop profile 安装
@@ -56,7 +57,7 @@ npm install .\dsh-deepseek-web-0.2.11.tgz
 ```json
 {
   "dependencies": {
-    "dsh-deepseek-web": "^0.2.11"
+    "dsh-deepseek-web": "^0.2.12"
   },
   "dsh": {
     "profile": {
@@ -103,9 +104,9 @@ node node_modules/dsh-deepseek-web/tools/browser-keeper.mjs \
 ### dsh 新对话与网页窗口
 
 dsh 创建新对话时，插件会在已经打开的 DeepSeek 浏览器窗口和当前标签页中点击网页的
-“新对话”入口。它不会为每个 dsh 对话重新启动浏览器，也不会额外打开新的网页标签；
-上下文过长需要轮换时同样复用当前页面。只有首次使用、页面被用户关闭或浏览器进程失效时，
-插件才会重新建立页面连接。
+“新对话”入口。普通任务复用当前工作标签，上下文过长需要轮换时同样复用当前页面。
+从 0.2.12 起，dsh 内部摘要和标题生成会临时打开独立标签，共享登录态，结束、失败或取消后关闭；
+不会向工作标签发送摘要指令。切换已有 dsh 会话或重启后首次使用时，会根据宿主历史重建上下文。
 
 ### 浏览器启动方式与网页可见特征
 
@@ -177,6 +178,41 @@ node node_modules/dsh-deepseek-web/tools/glm-status.mjs --turn
 ```
 
 审核证据会优先读取工具实际写入的文件，并在达到 `maxEvidenceChars` 时标注截断。
+内部摘要和标题请求不进入交付审核，也不会附加“审核通过”等文字。
+
+## 0.2.12：上下文压缩与任务接续
+
+dsh 的上下文压缩会发起 `purpose: compaction` 辅助调用。已核查的桌面版
+0.2.0-rc.2 官方压缩模板要求使用英文生成交接摘要；这类摘要应供后续模型使用，
+不能代替用户要求的中文文件、流程包或其他交付。先前插件将它当成普通任务，
+可能覆盖当前任务、清空消息游标，并遗漏压缩后的宿主检查点。
+
+0.2.12 对 `compaction` 和 `session-title` 使用独立的一次性处理流程：
+
+- 在临时网页对话中按此次请求提供的历史范围生成正文，不读取工作标签的隐式历史。
+- 不修改正常会话的任务目标、游标、审核状态、最近回复或 token 基线；辅助用量单独计入通道总计。
+- 不解析为本地工具动作，不执行网页工具委托，不展示辅助思考，不进入交付审核。
+- 保留宿主系统指令、插件上下文和 `compact-checkpoint`（含兼容的 `<compacted-summary>` 格式）。
+  检查点变化或旧游标失效时，在工作标签建立新对话，回放摘要、近期助手/工具消息与真实用户任务。
+- 首次读取旧状态时同步宿主历史，清除明确的官方压缩指令污染；原任务已被压缩移除时，依据检查点继续。
+- 对明确的未完成交接回复尝试一次纠错，仍返回交接摘要则报错；用户明确要求总结、摘要或分析时不拦截。
+
+升级后重启 dsh，继续原任务即可触发状态恢复，无需删除状态文件或已有交付文件。
+若旧会话保存了错误摘要且缺少原任务，请重新说明需要完成的工作或开启新对话。
+旧版已生成/写入的摘要或文件不会被自动改写，也不能保证从不完整的宿主历史恢复丢失事实。
+
+半自动模型的辅助请求仍需在临时标签人工点击发送；`deepseek-web-auto` 自动发送。
+请求串行执行以避免输入和回复混用。临时标签使用同一网站登录态，摘要语言仍由宿主指令决定；
+插件不会把所有英文回复一律过滤。
+
+网页明确报告输出上限时，辅助请求返回 `max-tokens`，由 dsh 拒绝不完整摘要；
+正常任务报 `WEB_REPLY_TRUNCATED`，不作为完整交付提交。网页报告中断或传输失败时会报错。
+网站未提供结束原因时，插件不能仅凭最后一个词准确判断是否截断，也无法保证网页严格执行
+宿主的 `maxTokens` 参数。摘要历史超过网页上限时，可在 dsh 的 `dsh-compaction-basic` 中配置
+独立的 `summarizationProvider` / `summarizationModel`，或缩小压缩范围。
+
+故障排查可对照 dsh 会话日志中的 `compaction/start`、`compaction/summary`、`compaction/end`
+与后续普通助手回复，并记录 dsh/插件版本和网页对应回复；不要只凭回复语言判断来源。
 
 ## 项目结构
 
@@ -201,7 +237,9 @@ npm pack
 
 `npm run build` 生成 `lib/index.js`（host ESM）和 `lib/client.js`（web client bundle）。
 解析器自测不访问网络，覆盖 DeepSeek SSE、Kimi Connect-RPC / gzip、GLM SSE、工具动作、
-审核证据、频控、用量、handoff、思考展示与长委托回复逻辑。需要真实网页时，再使用 `tools/` 下的登录和检查脚本。
+审核证据、频控、用量、handoff、思考展示、长委托回复、辅助调用隔离、压缩接续、旧状态恢复、
+取消清理与结束原因。浏览器隔离使用模拟页面验证；登录态、站点导航及发送行为仍需真实网页验证。
+需要真实网页时，再使用 `tools/` 下的登录和检查脚本。
 
 ## 卸载
 

@@ -31,6 +31,12 @@ export interface WebChatState {
   reviewedSignature?: string
   /** 网页端最近一次上报的会话累计 token 用量（accumulated_token_usage 基线）。 */
   usageBaseline?: number
+  /** 上下文同步协议版本；旧状态首次使用时从宿主历史重建。 */
+  contextVersion?: number
+  /** 宿主压缩检查点指纹，检查点变化时重建网页对话。 */
+  checkpointSignature?: string
+  /** 已发送的宿主系统指令指纹。 */
+  systemSignature?: string
 }
 
 /** 通道级 token 用量总计（跨 dsh 会话持久，随 session-state.json 保存）。 */
@@ -105,6 +111,9 @@ export class SessionRegistry {
               : 0,
             ...rawState.reviewedSignature === undefined ? {} : { reviewedSignature: rawState.reviewedSignature },
             ...rawState.usageBaseline === undefined ? {} : { usageBaseline: rawState.usageBaseline },
+            ...rawState.contextVersion === undefined ? {} : { contextVersion: rawState.contextVersion },
+            ...rawState.checkpointSignature === undefined ? {} : { checkpointSignature: rawState.checkpointSignature },
+            ...rawState.systemSignature === undefined ? {} : { systemSignature: rawState.systemSignature },
           })
         }
       }

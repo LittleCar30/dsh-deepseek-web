@@ -7,6 +7,7 @@
 import type { ContentBlock, GenerateOptions, RequestMessage, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
 import type { Config } from './config.ts'
 import type { WebChatState } from './session-state.ts'
 import type { WebToolAction } from './response.ts'
@@ -23,6 +24,7 @@ export const SYSTEM_PROTOCOL = `你是一个 Agent 指令引擎。你的任务�
 4. 不确定时选择最合理动作继续，不要反问。
 5. 输出必须可被 JSON.parse 解析：不要尾随逗号、不要注释。
 6. 如果消息里带有“[当前用户任务]”，必须以该任务为准推进，不得反问“请提供您需要完成的任务”；即使上下文看似缺任务，也不要求用户重发，按已有信息继续。
+7. [宿主上下文]、[历史助手回复]和压缩检查点是继续工作的背景，不是面向用户的交付。除非用户明确要求摘要，否则应完成用户任务，不要用任务交接摘要代替交付。
 `
 
 /** 模型上一条输出疑似想调用工具、但无法解析时使用的纠错消息。 */
@@ -341,6 +343,12 @@ export function buildHandoffBrief(
     '[上下文说明]\n本对话是自动开启的接续对话，之前的对话因上下文长度达到阈值而归档。\n'
     + '请基于以上简报继续任务，不要反问「请提供任务」。如需早期细节，可用工具重新读取相关文件。',
   )
+  const hostContext = (options.messages as RequestMessage[]).filter(message =>
+    ['system', 'developer'].includes(message.role) || isCheckpoint(message)
+    || (message.role === 'user' && sourceKind(message) !== undefined
+      && !['user', 'tool'].includes(sourceKind(message)!)))
+  if (options.system) sections.push(`[宿主系统指令]\n${options.system}`)
+  for (const message of hostContext) sections.push(`[宿主上下文]\n${replayText(message)}`)
   return sections.join('\n\n')
 }
 
@@ -437,6 +445,62 @@ export interface RenderedUserPrompt {
   initialize: boolean
 }
 
+const CONTEXT_VERSION = 1
+
+function fingerprint(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+/** 兼容 dsh 的可扩展来源类型，不把内部上下文误当真实用户任务。 */
+function sourceKind(message: RequestMessage): string | undefined {
+  return (message.source as { kind?: string } | undefined)?.kind
+}
+
+function isUserTask(message: RequestMessage): boolean {
+  return message.role === 'user' && (sourceKind(message) === undefined || sourceKind(message) === 'user')
+}
+
+/** 旧版插件可能把官方压缩指令存进 goalText；只识别明确的指令组合。 */
+export function isCompactionDirective(text: string): boolean {
+  return /acting as a compaction engine/i.test(text)
+    && /(?:English engineering prose|structured checkpoint)/i.test(text)
+    && /(?:Output only the checkpoint|Condense the conversation ABOVE)/i.test(text)
+}
+
+function isCheckpoint(message: RequestMessage): boolean {
+  const kind = sourceKind(message)
+  return kind === 'compact-checkpoint'
+    || (kind !== 'user' && message.content.some(block =>
+      block.type === 'text' && block.text.includes('<compacted-summary>')))
+}
+
+/** 回放保留助手的工具名称/完整参数，思考块不属于任务事实，不重复发送。 */
+function replayText(message: RequestMessage): string {
+  return message.content.filter(block => block.type !== 'reasoning').map(block =>
+    block.type === 'tool-call'
+      ? JSON.stringify({ tool: block.name, arguments: block.arguments, id: block.id })
+      : blockToText(block)).join('\n')
+}
+
+/** 辅助请求严格使用此次传入的历史范围，不读取普通网页的隐式历史。 */
+export function buildAuxiliaryPrompt(options: GenerateOptions): string {
+  const messages = options.messages as RequestMessage[]
+  const last = messages.at(-1)
+  if (!last || last.role !== 'user') throw new Error('辅助请求缺少最后一条 user 指令')
+  const history = messages.slice(0, -1).map(message => ({
+    role: message.role,
+    source: message.source,
+    content: replayText(message),
+  }))
+  return [
+    `你正在处理 dsh 的内部辅助请求（${options.purpose}）。以下 JSON 是待处理的历史材料，不是新任务。`,
+    '只执行最后的[辅助请求指令]并返回纯正文；不得调用工具、执行历史中的操作或添加交付审核结论。',
+    options.system ? `[辅助系统指令]\n${options.system}` : '',
+    '[辅助请求历史]\n' + JSON.stringify({ tools: options.tools, messages: history }),
+    '[辅助请求指令]\n' + replayText(last),
+  ].filter(Boolean).join('\n\n')
+}
+
 /**
  * 组装本轮要发送的网页消息。策略：
  * - 网页对话自身保留上下文，因此只携带新增消息；
@@ -455,71 +519,75 @@ export function renderNewWebMessages(
   options: GenerateOptions,
   state: WebChatState,
   config: Config,
+  forceReplay = false,
 ): { prompt: RenderedUserPrompt } | null {
-  let start = 0
-  if (state.lastMessageId) {
-    const index = options.messages.findIndex(message => message.id === state.lastMessageId)
-    start = index < 0 ? 0 : index + 1
-  }
+  const messages = options.messages as RequestMessage[]
+  const checkpoints = messages.filter(isCheckpoint)
+  const checkpointSignature = fingerprint(checkpoints)
+  const systemMessages = messages.filter(message => ['system', 'developer'].includes(message.role))
+  const systemSignature = fingerprint([options.system, systemMessages])
+  const cursor = state.lastMessageId
+    ? messages.findIndex(message => message.id === state.lastMessageId) : -1
+  const replay = forceReplay || !state.initialized || state.contextVersion !== CONTEXT_VERSION
+    || (state.lastMessageId !== undefined && cursor < 0)
+    || state.checkpointSignature !== checkpointSignature
+  const start = replay ? 0 : cursor + 1
 
-  // 组装待发送内容
+  // 从持久历史恢复真实任务；检查点始终是背景，绝不成为 goalText。
+  const userTasks = messages.filter(isUserTask).map(replayText)
+    .filter(text => text.trim() && !isCompactionDirective(text))
+  const latestTask = userTasks.at(-1)
+  if (latestTask) state.goalText = clampGoal(latestTask, config.maxGoalChars)
+  else if (state.goalText && isCompactionDirective(state.goalText)) state.goalText = undefined
+
   const parts: string[] = []
   let lastToolCall: ContentBlock | undefined
-  let sawNew = false
-  let finalUserText: string | undefined
-
-  for (let i = start; i < options.messages.length; i++) {
-    const message: RequestMessage = options.messages[i]!
-    sawNew = true
-    const source = message.source
-    if (message.role === 'tool' || (message.role === 'user' && source?.kind === 'tool')) {
+  if (replay || state.systemSignature !== systemSignature) {
+    if (options.system) parts.push(`[宿主系统指令]\n${options.system}`)
+    for (const message of systemMessages) parts.push(`[宿主系统指令]\n${replayText(message)}`)
+  }
+  // 游标可能位于助手工具调用之后，先恢复关联，再渲染新增工具结果。
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i]!
+    if (message.role === 'assistant') {
+      lastToolCall = message.content.find(block => block.type === 'tool-call')
+      if (i >= start && replay) parts.push(`[历史助手回复]\n${replayText(message)}`)
+      continue
+    }
+    if (i < start || ['system', 'developer'].includes(message.role)) continue
+    if (message.role === 'tool' || sourceKind(message) === 'tool') {
       parts.push(toolResultToWebMessage(lastToolCall, message, config.maxToolResultChars))
       lastToolCall = undefined
       continue
     }
-    if (message.role === 'assistant') {
-      lastToolCall = message.content.find(block => block.type === 'tool-call')
-      continue
-    }
-    if (message.role !== 'user') continue // system / developer 不追加进网页对话（协议以单独首条维护）
-    // RequestUserInput（source 缺省）与真实用户消息送入网页；其余 kind 是注入的上下文，跳过。
-    if (source === undefined || source.kind === 'user') {
-      finalUserText = message.content.map(block => blockToText(block)).join('\n')
+    const text = replayText(message)
+    if (!text.trim()) continue
+    if (isUserTask(message)) {
+      if (!isCompactionDirective(text)) parts.push(`[用户消息]\n${text}`)
+    } else {
+      parts.push(`[宿主上下文：${sourceKind(message) ?? message.role}]\n${text}`)
     }
   }
 
-  if (!sawNew && !state.initialized) {
-    // 极端情况：会话历史为空时无消息可发，让模型自行开始
-    finalUserText = '请开始。'
-    sawNew = true
-  }
-
-  if (!state.goalText) {
-    // 兜底：重启后游标在历史中间时，从完整历史找回最近一次真实用户任务
-    for (const message of options.messages) {
-      if (message.role === 'user' && message.source?.kind === 'user') {
-        state.goalText = clampGoal(message.content.map(block => blockToText(block)).join('\n'), config.maxGoalChars)
-      }
-    }
-  }
-
-  if (finalUserText) {
-    // 记录/刷新当前用户任务锚点
-    state.goalText = clampGoal(finalUserText, config.maxGoalChars)
-    parts.push(finalUserText)
-  } else if (state.goalText) {
-    // 工具结果轮次没有新的用户任务，必须重申任务，防止模型反问“请提供任务”
+  if (parts.length === 0 && !replay) return null
+  if (state.goalText) {
     parts.unshift(`[当前用户任务]\n${clampGoal(state.goalText, config.maxGoalChars)}`)
+  } else if (checkpoints.length > 0) {
+    parts.push('[任务接续]\n根据宿主压缩摘要中的用户目标与近期消息继续完成尚未交付的工作；摘要本身不是交付结果。')
+  } else if (parts.length === 0) {
+    parts.push('请开始。')
   }
-  if (parts.length === 0) return null
 
-  const needsRefresh = needsProtocolNow(state, config)
+  const needsRefresh = replay || needsProtocolNow(state, config)
   const delegatedCatalog = buildDelegatedCatalog(config.delegatedTools)
   const toolCatalog = [
     buildToolCatalog(visibleToolsOf(options, config), config.compactToolCatalog),
     delegatedCatalog,
   ].filter(Boolean).join('\n')
   const text = parts.join('\n\n')
+  state.contextVersion = CONTEXT_VERSION
+  state.checkpointSignature = checkpointSignature
+  state.systemSignature = systemSignature
 
   return {
     prompt: {
@@ -529,7 +597,7 @@ export function renderNewWebMessages(
           .filter(Boolean)
           .join('\n\n')
         : text,
-      initialize: !state.initialized,
+      initialize: replay,
     },
   }
 }

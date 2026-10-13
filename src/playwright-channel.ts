@@ -18,6 +18,7 @@ import { LlmError } from '@deepseek-ai/dsh-llm'
 import type { BrowserChannel, BrowserTurnRequest, BrowserTurnResult } from './browser-channel.ts'
 import type { Config, WebModelId } from './config.ts'
 import { WEB_MODEL_CAPABILITIES } from './config.ts'
+import { AsyncLock } from './async-lock.ts'
 import {
   bestEffortNewChat,
   connectBrowser,
@@ -47,6 +48,7 @@ interface ChatCompletionResponse {
   }
   status: number
   body: string
+  interrupted?: boolean
 }
 
 export interface PlaywrightChannelOptions {
@@ -70,6 +72,7 @@ export function parseCompletionBody(body: string): {
   accumulatedUsage?: number
   /** 网页端提示对话长度达到上限（finish_reason=context_length_exceeded）。 */
   contextLengthExceeded?: boolean
+  finishReason?: BrowserTurnResult['finishReason']
 } {
   interface LiveFragment {
     id?: number
@@ -85,6 +88,16 @@ export function parseCompletionBody(body: string): {
   let lastPatchOp = 'APPEND'
   let accumulatedUsage: number | undefined
   let contextLengthExceeded = false
+  let finishReason: BrowserTurnResult['finishReason']
+
+  function observeFinish(value: unknown): void {
+    if (typeof value !== 'string') return
+    const reason = value.toLowerCase()
+    if (reason === 'context_length_exceeded') contextLengthExceeded = true
+    else if (['length', 'max_tokens', 'max-tokens', 'max_output_tokens'].includes(reason)) finishReason = 'max-tokens'
+    else if (['interrupted', 'aborted', 'cancelled', 'canceled', 'content_filter', 'error'].includes(reason)) finishReason = 'interrupted'
+    else if (['stop', 'finished'].includes(reason) && !finishReason) finishReason = 'stop'
+  }
 
   /** 记录网页端上报的会话累计 token 用量（只增不减时取最新）。 */
   function observeUsage(value: unknown): void {
@@ -108,12 +121,13 @@ export function parseCompletionBody(body: string): {
 
   function collectFullResponse(json: unknown): void {
     const root = json as {
-      v?: { response?: { fragments?: LiveFragment[]; accumulated_token_usage?: unknown } }
+      v?: { response?: { fragments?: LiveFragment[]; accumulated_token_usage?: unknown; finish_reason?: unknown } }
     }
     if (root.v?.response?.accumulated_token_usage !== undefined) {
       observeUsage(root.v.response.accumulated_token_usage)
     }
     const fragmentList = root.v?.response?.fragments
+    observeFinish(root.v?.response?.finish_reason)
     if (!Array.isArray(fragmentList)) return
     for (const fragment of fragmentList) {
       if (typeof fragment.content !== 'string') continue
@@ -141,6 +155,8 @@ export function parseCompletionBody(body: string): {
     lastPatchPath = pointer
     lastPatchOp = op
 
+    if (pointer === 'response/finish_reason') observeFinish(value)
+
     if (pointer === 'response/fragments' && op === 'APPEND' && Array.isArray(value)) {
       for (const fragment of value as LiveFragment[]) {
         if (fragment && typeof fragment === 'object' && typeof fragment.content === 'string') {
@@ -164,6 +180,7 @@ export function parseCompletionBody(body: string): {
     if (op === 'BATCH' && Array.isArray(value)) {
       for (const item of value as Array<{ p?: unknown; v?: unknown }>) {
         if (item && item.p === 'accumulated_token_usage') observeUsage(item.v)
+        if (item && item.p === 'finish_reason') observeFinish(item.v)
       }
       return
     }
@@ -195,6 +212,8 @@ export function parseCompletionBody(body: string): {
     } catch {
       continue
     }
+    if (!json || typeof json !== 'object') continue
+    observeFinish(json.finish_reason)
 
     if (json && typeof json === 'object' && 'p' in json) {
       applyPatch(json)
@@ -227,11 +246,13 @@ export function parseCompletionBody(body: string): {
     if (Array.isArray((json as { choices?: unknown }).choices)) {
       const choiceJson = json as unknown as {
         choices?: Array<{
+          finish_reason?: unknown
           delta?: { content?: string; reasoning_content?: string; reasoner?: string }
           message?: { content?: string; reasoning_content?: string }
         }>
       }
       for (const choice of choiceJson.choices ?? []) {
+        observeFinish(choice.finish_reason)
         const delta = choice.delta
         const message = choice.message
         if (typeof message?.content === 'string') untrackedText += message.content
@@ -249,6 +270,7 @@ export function parseCompletionBody(body: string): {
       text: untrackedText.trim(),
       ...untrackedReasoning.trim() ? { reasoning: untrackedReasoning.trim() } : {},
       reliable: true,
+      ...finishReason ? { finishReason } : {},
       ...accumulatedUsage !== undefined ? { accumulatedUsage } : {},
       ...contextLengthExceeded ? { contextLengthExceeded: true } : {},
     }
@@ -257,14 +279,18 @@ export function parseCompletionBody(body: string): {
   try {
     const json = JSON.parse(body) as {
       choices?: Array<{
+        finish_reason?: unknown
         message?: { content?: string; reasoning_content?: string }
         text?: string
       }>
       content?: string
+      finish_reason?: unknown
     }
     let fallbackText = ''
     let fallbackReasoning = ''
+    observeFinish(json.finish_reason)
     for (const choice of json.choices ?? []) {
+      observeFinish(choice.finish_reason)
       if (typeof choice.message?.content === 'string') fallbackText += choice.message.content
       if (typeof choice.message?.reasoning_content === 'string') fallbackReasoning += choice.message.reasoning_content
       if (typeof choice.text === 'string') fallbackText += choice.text
@@ -275,6 +301,7 @@ export function parseCompletionBody(body: string): {
         text: fallbackText.trim(),
         ...fallbackReasoning.trim() ? { reasoning: fallbackReasoning.trim() } : {},
         reliable: true,
+        ...finishReason ? { finishReason } : {},
         ...accumulatedUsage !== undefined ? { accumulatedUsage } : {},
         ...contextLengthExceeded ? { contextLengthExceeded: true } : {},
       }
@@ -283,6 +310,7 @@ export function parseCompletionBody(body: string): {
     return {
       text: '',
       reliable: false,
+      ...finishReason ? { finishReason } : {},
       ...accumulatedUsage !== undefined ? { accumulatedUsage } : {},
       ...contextLengthExceeded ? { contextLengthExceeded: true } : {},
     }
@@ -291,6 +319,7 @@ export function parseCompletionBody(body: string): {
     return {
       text: body.trim(),
       reliable: false,
+      ...finishReason ? { finishReason } : {},
       ...accumulatedUsage !== undefined ? { accumulatedUsage } : {},
       ...contextLengthExceeded ? { contextLengthExceeded: true } : {},
     }
@@ -301,10 +330,12 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
   private browser: Browser | undefined
   private context: BrowserContext | undefined
   private page: Page | undefined
+  private readonly turnLock = new AsyncLock()
+  private activeSessionId: string | undefined
   /** 当前页面是否已经承载过 agent 对话；同一浏览器进程内只新建一次对话。 */
   private conversationStarted = false
   /** 页面原始标题，用于状态标记前缀的清除/还原。 */
-  private originalTitle: string | undefined
+  private readonly originalTitles = new WeakMap<Page, string>()
   private readonly options: PlaywrightChannelOptions
   private readonly profileDir: string
   private managedConnection: ManagedBrowserConnection | undefined
@@ -317,7 +348,14 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
   }
 
   async ensureReady(): Promise<void> {
-    if (this.browser && this.page) return
+    if (this.browser && this.page && !this.page.isClosed()) return
+    if (this.browser?.isConnected() && this.context) {
+      this.page = await this.context.newPage()
+      this.conversationStarted = false
+      this.activeSessionId = undefined
+      await ensureChatPage(this.page, this.options.config.url)
+      return
+    }
 
     if (this.options.config.browser === 'attach') {
       // 连接（必要时自动拉起）浏览器常驻守护，逻辑集中在 browser-shared 的 connectBrowser
@@ -373,12 +411,16 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
     this.conversationStarted = false
   }
 
+  isConversationActive(sessionId: string): boolean {
+    return this.activeSessionId === sessionId && this.page !== undefined && !this.page.isClosed()
+  }
+
   /** 轮换到全新网页对话（上下文长度达到上限时由 adapter 调用）。 */
   async startNewConversation(): Promise<void> {
     // 只切换当前 Page 内的网页会话；不要创建新 Browser、BrowserContext 或 Page。
     if (!this.page) await this.ensureReady()
     const page = this.page!
-    this.originalTitle = undefined
+    this.originalTitles.delete(page)
     await this.startFreshConversation(page)
     this.conversationStarted = true
   }
@@ -389,7 +431,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
    * 先尝试点击侧栏入口；若点击失败或 URL 未变化，则回退为重新打开入口页，
    * 强制落到全新对话，避免沿用上一次的网页会话（全自动模式下的典型问题）。
    */
-  private async startFreshConversation(page: Page): Promise<void> {
+  private async startFreshConversation(page: Page, entryUrl = this.options.config.url): Promise<void> {
     const beforeUrl = page.url()
     const existingPages = new Set(page.context().pages())
     const clicked = await bestEffortNewChat(page)
@@ -402,7 +444,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
       console.info('[deepseek-web] 已切换到新对话。')
     } else {
       console.warn('[deepseek-web] 未能确认切换到新对话，回退为重新打开入口页以强制新会话。')
-      await page.goto(this.options.config.url, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {})
+      await page.goto(entryUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {})
       await page.waitForTimeout(1_000)
     }
     // 新对话页/入口页是 SPA：导航完成后编辑器可能滞后渲染，等待它出现再返回
@@ -410,50 +452,85 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
   }
 
   private async markPageStatus(page: Page, marker: string | undefined): Promise<void> {
-    if (this.originalTitle === undefined) {
-      this.originalTitle = await page.title()
+    if (!this.originalTitles.has(page)) {
+      this.originalTitles.set(page, await page.title())
     }
-    const clean = this.originalTitle.replace(/^\[dsh[^\]]*\]\s*/u, '')
+    const clean = this.originalTitles.get(page)!.replace(/^\[dsh[^\]]*\]\s*/u, '')
     await page.evaluate(({ title, prefix }) => {
       document.title = prefix ? `${prefix} ${title}` : title
     }, { title: clean, prefix: marker })
   }
 
   async turn(request: BrowserTurnRequest): Promise<BrowserTurnResult> {
-    if (!this.page) await this.ensureReady()
-    const page = this.page!
+    const release = await this.turnLock.acquire(request.signal)
+    try {
+      if (!this.page) await this.ensureReady()
+      const page = this.page!
 
-    // 诊断：新开 dsh 会话却沿用旧网页对话时，这三项值可直接定位问题：
-    // initialize=false 表示 adapter 侧根本没触发初始化分支（sessionId/状态问题）；
-    // initialize=true 且 conversationStarted=true 表示闸门没被 resetConversationGate 重置。
-    console.info(
-      `[deepseek-web] turn 入口 session=${request.sessionId} initialize=${String(request.initialize)} conversationStarted=${String(this.conversationStarted)}`,
-    )
+      console.info(
+        `[deepseek-web] turn 入口 session=${request.sessionId} initialize=${String(request.initialize)} conversationStarted=${String(this.conversationStarted)}`,
+      )
 
-    if (request.initialize && !this.conversationStarted) {
-      await this.startFreshConversation(page)
-      this.conversationStarted = true
+      if (request.initialize && !this.conversationStarted) {
+        await this.startFreshConversation(page)
+        this.conversationStarted = true
+      }
+      if (!request.preserveConversation) this.activeSessionId = request.sessionId
+      return await this.turnOnPage(page, request)
+    } finally {
+      release()
     }
+  }
+
+  async turnIsolated(request: BrowserTurnRequest): Promise<BrowserTurnResult> {
+    const release = await this.turnLock.acquire(request.signal)
+    let page: Page | undefined
+    try {
+      await this.ensureReady()
+      request.signal?.throwIfAborted()
+      page = await this.context!.newPage()
+      const entryUrl = new URL('/', this.options.config.url).href
+      await page.goto(entryUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+      await this.startFreshConversation(page, entryUrl)
+      return await this.turnOnPage(page, request)
+    } finally {
+      await page?.close().catch(() => {})
+      await this.setWebWindowTopmost(request.sessionId, false).catch(() => {})
+      release()
+    }
+  }
+
+  private async turnOnPage(page: Page, request: BrowserTurnRequest): Promise<BrowserTurnResult> {
 
     // 频控自动重发：网页提示“发送过于频繁”时等待后重发同一条消息，
     // 而不是中断回合报错；重试用尽才抛 WEB_RATE_LIMITED。
     const rateLimit = this.options.config.rateLimit
     const maxRetries = rateLimit?.enabled === false ? 0 : rateLimit?.maxRetries ?? 5
     for (let attempt = 0; ; attempt++) {
+      request.signal?.throwIfAborted()
       const outcome = await this.sendAndWait(page, request)
       if (outcome.kind === 'completed') {
         const parsed = parseCompletionBody(outcome.completion.body)
-        if (!parsed.text && !parsed.reasoning && parsed.contextLengthExceeded !== true) {
+        if (outcome.completion.status >= 400) throw new LlmError(
+          `网页返回 HTTP ${outcome.completion.status}，未作为有效回复提交。`, 'WEB_HTTP_ERROR')
+        if (!parsed.text && !parsed.reasoning && parsed.contextLengthExceeded !== true
+          && !outcome.completion.interrupted && !['max-tokens', 'interrupted'].includes(parsed.finishReason ?? '')) {
           throw new LlmError(
             `deepseek-web: 网页响应没有可解析正文（HTTP ${outcome.completion.status}，${outcome.completion.url}）`,
             'WEB_EMPTY_RESPONSE',
           )
+        }
+        if (!parsed.reliable && !parsed.contextLengthExceeded && !parsed.finishReason
+          && !outcome.completion.interrupted) {
+          throw new LlmError('网页响应格式无法识别，原始网络内容未作为正文提交。', 'WEB_UNPARSEABLE_RESPONSE')
         }
         return {
           text: parsed.text,
           ...parsed.reasoning !== undefined ? { reasoning: parsed.reasoning } : {},
           ...parsed.accumulatedUsage !== undefined ? { accumulatedUsage: parsed.accumulatedUsage } : {},
           ...parsed.contextLengthExceeded === true ? { contextLengthExceeded: true } : {},
+          ...outcome.completion.interrupted ? { finishReason: 'interrupted' as const }
+            : parsed.finishReason ? { finishReason: parsed.finishReason } : {},
         }
       }
       if (attempt >= maxRetries) {
@@ -497,7 +574,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
       return true
     }, { timeout: this.options.config.streamIdleTimeoutMs }).then(async response => {
       await this.markPageStatus(page, '[dsh 网页生成中]').catch(() => {})
-      await response.finished().catch(() => {})
+      const interrupted = await response.finished().then(error => error !== null, () => true)
       const body = await response.body().catch(() => '')
       if (!waiterActive) return undefined
       return {
@@ -507,75 +584,91 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
         },
         status: response.status(),
         body: body.toString(),
+        interrupted,
       } satisfies ChatCompletionResponse
     }, (error) => {
       if (!waiterActive) return undefined
       throw error
     })
+    // 编辑器等待或取消可能先于 waiter 结束，提前安装 rejection handler。
+    void waiter.catch(() => {})
 
-    let rateLimitedNow: (() => void) | undefined
-    const rateLimited = new Promise<{ kind: 'rate-limited' }>(resolve => {
-      rateLimitedNow = () => resolve({ kind: 'rate-limited' })
+    let abortListener: (() => void) | undefined
+    const aborted = new Promise<never>((_, reject) => {
+      if (!request.signal) return
+      abortListener = () => reject(new LlmError('网页回合已取消。', 'WEB_TURN_ABORTED'))
+      request.signal.addEventListener('abort', abortListener, { once: true })
+      if (request.signal.aborted) abortListener()
     })
-
-    const editor = locateEditor(page)
-    if (!(await editor.isVisible().catch(() => false))) {
-      // 轮换/导航后 SPA 渲染可能滞后：先等输入框出现（最多 15 秒），仍没有再报错
-      const appeared = await editor.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false)
-      if (!appeared) {
-        waiterActive = false
-        if (await looksLoggedOut(page)) {
-          throw new LlmError(
-            'deepseek-web: 浏览器窗口已打开，但 chat.deepseek.com 尚未登录。'
-            + '请在窗口中完成登录后重试本轮任务（登录状态会保存在本地 profile）。',
-            'WEB_LOGIN_REQUIRED',
-          )
-        }
-        throw new LlmError(
-          'deepseek-web: 未找到聊天输入框。请确认浏览器停留在 chat.deepseek.com 的对话页；'
-          + '若刚切换过页面请稍等片刻后重试。',
-          'WEB_EDITOR_NOT_FOUND',
-        )
-      }
-    }
-
-    // 实时思考流：确保页面里的网络镜像已就位（幂等），发送后轮询增量
-    const progressTimer = request.onProgress
-      ? await this.startProgressPolling(page, request)
-      : undefined
-    const toastTimer = setInterval(() => {
-      void hasRateLimitToast(page).then(hit => {
-        if (hit) rateLimitedNow?.()
-      })
-    }, POLL_INTERVAL_MS)
-
-    await editor.click()
-    // 清掉可能残留的内容
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
-    await page.keyboard.press('Backspace')
-    await page.keyboard.insertText(request.text)
-    this.conversationStarted = true
-    if (autoSend) {
-      // 全自动：输入框已聚焦（editor.click），模拟回车发送；不动窗口焦点，dsh 全程在前
-      await editor.focus()
-      await page.keyboard.press('Enter')
-      await this.markPageStatus(page, '[dsh 自动发送中]')
-      console.info('[deepseek-web] 全自动：已输入并回车发送…')
-    } else {
-      // 半自动：网页窗口置顶到屏幕最上方并聚焦输入框，用户直接回车或点击发送
-      await page.bringToFront()
-      await this.focusBrowser()
-      const focus = this.options.config.focus
-      if (focus?.enabled !== false && focus?.webWindow !== false) {
-        await setBrowserWindowTopmost({ profileDir: this.profileDir, topmost: true }).catch(() => {})
-      }
-      await editor.focus()
-      await this.markPageStatus(page, '[dsh 等待你在网页点击发送]')
-      console.info('[deepseek-web] 消息已填入 Edge 并置顶聚焦，请回车或点击“发送”…')
-    }
+    void aborted.catch(() => {})
+    let progressTimer: NodeJS.Timeout | undefined
+    let toastTimer: NodeJS.Timeout | undefined
 
     try {
-      const winner = await Promise.race([waiter, rateLimited])
+      request.signal?.throwIfAborted()
+
+      let rateLimitedNow: (() => void) | undefined
+      const rateLimited = new Promise<{ kind: 'rate-limited' }>(resolve => {
+        rateLimitedNow = () => resolve({ kind: 'rate-limited' })
+      })
+
+      const editor = locateEditor(page)
+      if (!(await editor.isVisible().catch(() => false))) {
+        // 轮换/导航后 SPA 渲染可能滞后：先等输入框出现（最多 15 秒），仍没有再报错
+        const appeared = await editor.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true).catch(() => false)
+        if (!appeared) {
+          waiterActive = false
+          if (await looksLoggedOut(page)) {
+            throw new LlmError(
+              'deepseek-web: 浏览器窗口已打开，但 chat.deepseek.com 尚未登录。'
+              + '请在窗口中完成登录后重试本轮任务（登录状态会保存在本地 profile）。',
+              'WEB_LOGIN_REQUIRED',
+            )
+          }
+          throw new LlmError(
+            'deepseek-web: 未找到聊天输入框。请确认浏览器停留在 chat.deepseek.com 的对话页；'
+            + '若刚切换过页面请稍等片刻后重试。',
+            'WEB_EDITOR_NOT_FOUND',
+          )
+        }
+      }
+
+      // 实时思考流：确保页面里的网络镜像已就位（幂等），发送后轮询增量
+      progressTimer = request.onProgress
+        ? await this.startProgressPolling(page, request)
+        : undefined
+      toastTimer = setInterval(() => {
+        void hasRateLimitToast(page).then(hit => {
+          if (hit) rateLimitedNow?.()
+        })
+      }, POLL_INTERVAL_MS)
+
+      request.signal?.throwIfAborted()
+      await editor.click()
+      // 清掉可能残留的内容
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+      await page.keyboard.press('Backspace')
+      await page.keyboard.insertText(request.text)
+      if (page === this.page) this.conversationStarted = true
+      if (autoSend) {
+        // 全自动：输入框已聚焦（editor.click），模拟回车发送；不动窗口焦点，dsh 全程在前
+        await editor.focus()
+        await page.keyboard.press('Enter')
+        await this.markPageStatus(page, '[dsh 自动发送中]')
+        console.info('[deepseek-web] 全自动：已输入并回车发送…')
+      } else {
+        // 半自动：网页窗口置顶到屏幕最上方并聚焦输入框，用户直接回车或点击发送
+        await page.bringToFront()
+        const focus = this.options.config.focus
+        if (focus?.enabled !== false && focus?.webWindow !== false) {
+          await setBrowserWindowTopmost({ profileDir: this.profileDir, topmost: true }).catch(() => {})
+        }
+        await editor.focus()
+        await this.markPageStatus(page, '[dsh 等待你在网页点击发送]')
+        console.info('[deepseek-web] 消息已填入 Edge 并置顶聚焦，请回车或点击“发送”…')
+      }
+
+      const winner = await Promise.race([waiter, rateLimited, aborted])
       // 作废 waiter 的 undefined 不会先于 race 落定；防御性兜底按频控处理
       if (winner === undefined) return { kind: 'rate-limited' }
       if ('kind' in winner) return winner
@@ -586,6 +679,8 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
       console.info('[deepseek-web] 已收到网页完整回复，正在解析…')
       return { kind: 'completed', completion: winner }
     } catch (error) {
+      if (request.signal?.aborted) throw new LlmError('网页回合已取消。', 'WEB_TURN_ABORTED')
+      if (error instanceof LlmError) throw error
       if (page.isClosed()) {
         throw new LlmError('deepseek-web: 浏览器页面被关闭', 'WEB_PAGE_CLOSED')
       }
@@ -601,6 +696,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
       waiterActive = false
       clearInterval(toastTimer)
       if (progressTimer) clearInterval(progressTimer)
+      if (abortListener) request.signal?.removeEventListener('abort', abortListener)
       await this.markPageStatus(page, undefined).catch(() => {})
     }
   }
@@ -811,5 +907,6 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
     this.context = undefined
     this.page = undefined
     this.conversationStarted = false
+    this.activeSessionId = undefined
   }
 }

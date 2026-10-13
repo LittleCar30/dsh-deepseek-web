@@ -32,6 +32,8 @@ export interface BrowserTurnRequest {
    * liveThinking 时把 reasoning 作为思考块展示。支持与否取决于通道实现。
    */
   onProgress?: (progress: BrowserTurnProgress) => void
+  /** 同对话自审不能改变工作页面所属的正常 session。 */
+  preserveConversation?: boolean
 }
 
 export interface BrowserTurnResult {
@@ -46,6 +48,8 @@ export interface BrowserTurnResult {
   accumulatedUsage?: number
   /** 网页端提示对话长度达到上限（需要轮换新对话）。 */
   contextLengthExceeded?: boolean
+  /** 网页明确报告的结束原因；缺省表示网站未提供该信息。 */
+  finishReason?: 'stop' | 'max-tokens' | 'interrupted'
   /** 页面/网络层诊断信息。 */
   meta?: Record<string, unknown>
 }
@@ -57,6 +61,10 @@ export interface BrowserChannel {
   resetConversationGate(): void
   /** 发起一轮网页对话并等待最终回复。 */
   turn(request: BrowserTurnRequest): Promise<BrowserTurnResult>
+  /** 内部摘要/标题调用：独立临时页面，不能复用正常工作的网页对话。 */
+  turnIsolated?(request: BrowserTurnRequest): Promise<BrowserTurnResult>
+  /** 正常会话是否仍占用当前工作页面；否则 adapter 必须回放宿主上下文。 */
+  isConversationActive?(sessionId: string): boolean
   /** 轮换到全新网页对话（可选；仅主对话通道需要）。 */
   startNewConversation?(): Promise<void>
   /** 当前连接状态，供 UI/日志展示。 */
