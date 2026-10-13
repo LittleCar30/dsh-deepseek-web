@@ -2,6 +2,8 @@
 
 ## 0.2.13 — 2026-10-13
 
+- npm 官方源已发布 0.2.13，`latest` 指向该版本；桌面版「添加插件」可直接输入 `dsh-deepseek-web-littlecar30@0.2.13`。
+
 - 发行包改名为 `dsh-deepseek-web-littlecar30`。npm 的 `dsh-deepseek-web` 属于另一位作者，不能用于安装本项目；GitHub 仓库地址不变。
 - 同步客户端模块 ID 和配置页注册键，确保新包名下仍能加载客户端和打开中文配置页。
 - 安装说明优先使用桌面版「插件 → 添加插件」，直接粘贴 Release 安装包链接；无需编译、手改 profile 或手动加载 patch。

@@ -18,23 +18,23 @@
 ## 运行要求
 
 - dsh 桌面版 0.2 或更高版本，且宿主提供本包声明的 `@deepseek-ai/*` peer 依赖。
-- Node.js 22 或更高版本（仅在使用命令行工具、从源码构建或安装 tgz 时需要）。
+- Node.js 22 或更高版本（仅在使用命令行工具或从源码构建时需要；桌面版图形安装无需另装）。
 - Microsoft Edge 或 Google Chrome；默认使用 Edge。
 - DeepSeek 网页账号。Kimi / GLM 审核只有在对应网站完成登录后才可用。
 
-本插件只依赖宿主提供的 dsh 接口。`@deepseek-ai/cordis`、`dsh-llm`、`dsh-brand`
-和 `schemastery` 保持为 peer dependency，以确保插件与桌面版使用同一份运行时模块。
+本插件只依赖宿主提供的 dsh 接口。`@deepseek-ai/cordis`、`dsh-llm`、`schemastery`
+和 React 保持为 peer dependency，以确保插件与桌面版使用同一份运行时模块。
 `playwright-core` 是插件自己的运行依赖，会随 npm 包安装。
 
 ## 安装（推荐：直接在桌面版操作）
 
 1. 打开 dsh 桌面版，在侧栏点击 **插件 → 添加插件**。
-2. 复制下面整行链接，粘贴到安装输入框，点击 **安装**。
+2. 复制下面包名，粘贴到安装输入框，安装源选择 **npm 官方源**，点击 **安装**。
 3. 安装完成后点击 **立即启用**，再重启 dsh，确保新版模块已加载。
 4. 选择 `deepseek-web` 模型，在自动打开的 Edge 窗口登录 DeepSeek，即可开始使用。
 
 ```text
-https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.13/dsh-deepseek-web-littlecar30-0.2.13.tgz
+dsh-deepseek-web-littlecar30@0.2.13
 ```
 
 **不用下载源码、安装 Node.js、运行 npm 或修改 profile。**
@@ -50,9 +50,15 @@ https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.13/dsh-de
 **不要同时启用两个包**。正常卸载保留 `%LOCALAPPDATA%\DshDeepSeekWeb\` 中的登录态和会话数据，
 无需重新下载浏览器或删除状态文件。卸载前记下自定义配置，安装后检查并恢复这些设置。
 
-### 网络不通时
+### GitHub 链接与本地安装包
 
-如果 GitHub 链接无法访问，可先从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest)
+也可在「添加插件」粘贴发行包链接：
+
+```text
+https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.13/dsh-deepseek-web-littlecar30-0.2.13.tgz
+```
+
+或先从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest)
 下载 `.tgz`，在同一个「添加插件」输入框粘贴文件的**完整绝对路径**，例如：
 
 ```text
@@ -62,9 +68,11 @@ C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.13.tgz
 压缩包已经包含编译产物，但安装依赖仍需要网络；安装界面可选择 npm 官方源或中国大陆镜像源。
 切换 npm 镜像不能代替 GitHub 下载。
 
-### npm 入口（发布后可用）
+### npm 已发布
 
-本项目使用的 npm 包名是 `dsh-deepseek-web-littlecar30`。完成 npm 发布后，桌面版「添加插件」也可以直接填：
+[npm 发行页](https://www.npmjs.com/package/dsh-deepseek-web-littlecar30) 已发布 0.2.13。
+桌面版「添加插件」直接填包名即可；希望始终安装当时最新版也可填 `dsh-deepseek-web-littlecar30`。
+本次固定版本入口：
 
 ```text
 dsh-deepseek-web-littlecar30@0.2.13
