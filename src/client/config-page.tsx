@@ -3,8 +3,8 @@
  *
  * dsh 0.2 的插件配置界面不再是「Config schema 自动投影」，而是由插件客户端半侧
  * 显式注册到 Plugin Manager 声明的 slot 上。本文件注册 `plugins.row.config`，
- * key 为 `<包名>#<行 id>`，即 `dsh-deepseek-web#llm-deepseek-web`；侧栏「插件」页
- * → 组合包 `dsh-deepseek-web` → 行 `llm-deepseek-web` 上会因此多出「配置」入口。
+ * key 为 `<包名>#<行 id>`，即 `dsh-deepseek-web-littlecar30#llm-deepseek-web`；侧栏「插件」页
+ * → 组合包 `dsh-deepseek-web-littlecar30` → 行 `llm-deepseek-web` 上会因此多出「配置」入口。
  *
  * 读写全部走宿主传入的 `form`（`ConfigPageForm`）：
  * - `form.state` 是 `ConfigFormSnapshot`，含解析后的 `value`、`revision`、`writable`；
@@ -13,7 +13,7 @@
  * 表单是暂存式的：只有点「保存」才写入，离开页面丢弃草稿。这与上游
  * 「只有保存才写入」的契约一致。
  *
- * @module dsh-deepseek-web/client/config-page
+ * @module dsh-deepseek-web-littlecar30/client/config-page
  */
 
 import { useState } from 'react'
@@ -21,7 +21,7 @@ import type { JSX } from 'react'
 import type { PluginConfigViewProps } from '@deepseek-ai/dsh-client-ui-plugin-manager/client'
 
 /** 本包在 profile 里的 npm 包名。 */
-export const PACKAGE_NAME = 'dsh-deepseek-web'
+export const PACKAGE_NAME = 'dsh-deepseek-web-littlecar30'
 
 /** 插件入口在包自带 patch 里声明的行 id；与包名一起构成槽位 key，也是宿主的 settings entry id。 */
 export const ROW_ENTRY_ID = 'llm-deepseek-web'

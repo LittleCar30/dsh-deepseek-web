@@ -1,41 +1,41 @@
-# 安装速查
+# 中文安装速查
 
-`dsh-deepseek-web` 是面向 dsh 桌面版 0.2+ 的独立插件。它通过真实浏览器驱动
-`chat.deepseek.com`，并把网页回复转换为 dsh 的 `deepseek-web` provider。
+本项目发行包：`dsh-deepseek-web-littlecar30@0.2.13`，适用于 dsh 桌面版 0.2+。
 
-## 1. 安装包
+## 新用户：在桌面版粘贴链接安装
 
-```bash
-npm install dsh-deepseek-web
-# 或
-npm install /path/to/dsh-deepseek-web-0.2.12.tgz
+1. dsh 左侧栏点击 **插件 → 添加插件**。
+2. 粘贴下面链接，点击 **安装**。
+3. 安装完成后点击 **立即启用**，然后重启 dsh。
+4. 选择 `deepseek-web`，在插件自动打开的 Edge 窗口登录 DeepSeek。
+
+```text
+https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.13/dsh-deepseek-web-littlecar30-0.2.13.tgz
 ```
 
-建议把包安装在桌面版使用的 Node/npm 环境中，使 `@deepseek-ai/cordis`、
-`@deepseek-ai/dsh-llm` 等 peer 依赖解析到桌面版自己的实例。
+无需安装 Node.js、克隆源码或手改配置文件。安装包内已带 host/client 编译产物。
+默认模式需要在网页手动点发送；自动模式选择 `deepseek-web-auto`。
 
-## 2. 加入 Desktop profile
+## 已有用户：卸载旧包，再安装新版
 
-在 profile manifest 的 `dependencies` 中加入包，并在 `dsh.profile.bundles` 中加入
-`dsh-deepseek-web`。本地 tgz 使用 `file:` 绝对路径；升级本地 tgz 时递增版本号。
+插件管理界面目前不支持自动更新。先记下自定义配置，在插件页卸载旧版，
+再按上面步骤安装并重启。0.2.12 及以前包名为 `dsh-deepseek-web`，
+0.2.13 起包名为 `dsh-deepseek-web-littlecar30`，不要同时启用两者。
+卸载保留 `%LOCALAPPDATA%\DshDeepSeekWeb\` 中的浏览器登录态和运行数据；不用删除状态文件。
+安装后在新插件详情的 `llm-deepseek-web` 行点击 **配置**，检查自定义设置。
 
-```json
-{
-  "dependencies": { "dsh-deepseek-web": "^0.2.12" },
-  "dsh": { "profile": { "bundles": ["dsh-deepseek-web"] } }
-}
-```
+## 其他安装入口与常见问题
 
-也可以直接用 patch 启动：
+- **本地安装包**：从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest) 下载 `.tgz`，
+  在「添加插件」输入框粘贴完整绝对路径，例如 `C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.13.tgz`。
+- **npm（发布后可用）**：完成本项目 npm 发布后，在「添加插件」填 `dsh-deepseek-web-littlecar30@0.2.13`。
+  刚发布时选 npm 官方源；中国大陆镜像源可能尚未同步。
+- **不能安装 `dsh-deepseek-web`**：npm 上这个名字属于另一位作者，不是本项目；务必使用完整新名字或本项目 Release 链接。
+- **下载失败**：安装界面展开「查看安装详情」查看原因。npm 镜像可帮助下载依赖，不能代替访问 GitHub。
+- **没有「添加插件」入口**：更新 dsh 桌面版；本流程已对照 0.2.0-rc.2 的插件管理说明。手工 profile/CLI 见 [README](README.md#命令行--手动-profile进阶)。
+- **已安装但没生效**：确认点击过「立即启用」、没有同时启用旧包，并重启 dsh；插件页检查 `llm-deepseek-web` 的运行状态。
 
-```bash
-dsh web --patch node_modules/dsh-deepseek-web/dsh.patch.yml
-```
-
-不要把 patch 路径写死到某个工作区；包内 patch 会以自身目录解析
-`lib/index.js` 和 `lib/client.js`。
-
-## 3. 启动浏览器并登录
+## 首次登录与模型选择
 
 默认模式是 `browser: managed`。启动桌面版并第一次使用模型时，插件会直接打开
 独立的真实 Edge 窗口；在该窗口登录 DeepSeek 即可。登录态和状态文件位于
@@ -44,7 +44,7 @@ dsh web --patch node_modules/dsh-deepseek-web/dsh.patch.yml
 只有选择 `browser: attach` 时，才需要手动启动 CDP 浏览器：
 
 ```bash
-node node_modules/dsh-deepseek-web/tools/browser-keeper.mjs --port 9333
+node node_modules/dsh-deepseek-web-littlecar30/tools/browser-keeper.mjs --port 9333
 ```
 
 启动桌面版后，模型选择 `deepseek-web`；默认发送模式需要用户在网页中人工点击“发送”。
@@ -63,32 +63,25 @@ node node_modules/dsh-deepseek-web/tools/browser-keeper.mjs --port 9333
 网页明确报告截断或中断时不会按正常完成提交；网站不报告原因时无法保证识别所有截断。
 更多恢复条件、限制与排查步骤见 README 的“0.2.12：上下文压缩与任务接续”。
 
-## 4. 可选审核
+## 可选审核
 
 在插件设置中打开 `review.enabled`，并选择 `deepseek-web`、`kimi` 或 `glm`。
 Kimi / GLM 需要先运行对应的登录工具，并保持审核浏览器的 CDP 端口可用：
 
 ```bash
-node node_modules/dsh-deepseek-web/tools/open-login-kimi.mjs
-node node_modules/dsh-deepseek-web/tools/open-login-glm.mjs
+node node_modules/dsh-deepseek-web-littlecar30/tools/open-login-kimi.mjs
+node node_modules/dsh-deepseek-web-littlecar30/tools/open-login-glm.mjs
 ```
 
-## 5. 验证安装
+## 验证安装
 
-确认插件列表出现 `llm-deepseek-web`，并运行：
+插件页应出现 **DeepSeek 网页版通道**，其 `llm-deepseek-web` 行应启用，能打开中文配置页。
+模型列表应出现 `deepseek-web` 与 `deepseek-web-auto`。先发送一句简单问候，
+确认 Edge 中可以提交消息，dsh 收到最终正文；半自动模式需要你在网页点发送。
 
-```bash
-npm run test:parsers
-```
+开发者离线测试需在源码目录执行 `npm run test:parsers`，普通安装用户无需运行。
 
-该命令只做离线解析和协议自测；网页登录、CDP 和页面结构检查使用 `tools/` 下的
-`inspect-page.mjs`、`inspect-kimi.mjs`、`glm-status.mjs`。
+## 卸载
 
-## 6. 卸载
-
-```bash
-npm uninstall dsh-deepseek-web
-```
-
-从 profile bundles 或启动参数移除插件后，可按需删除
-`%LOCALAPPDATA%\DshDeepSeekWeb\`。
+桌面版 **插件 → 本插件详情 → 卸载**。登录态和运行数据默认保留。
+手工 profile/CLI 安装者的卸载命令见 README。
