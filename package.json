@@ -19,7 +19,9 @@
     "cordis.yml",
     "INSTALL.md",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs",
+    "RELEASING.md"
   ],
   "meta": {
     "title": "DeepSeek 网页版通道",

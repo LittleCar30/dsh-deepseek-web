@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="460" viewBox="0 0 1280 460" role="img" aria-labelledby="title desc">
+  <title id="title">DeepSeek 网页通道</title>
+  <desc id="desc">通过真实 Edge 或 Chrome 网页连接 dsh，支持半自动、全自动和可选交付审核。右侧为流程示意。</desc>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1">
+      <stop stop-color="#0b162b"/>
+      <stop offset="1" stop-color="#112e44"/>
+    </linearGradient>
+    <linearGradient id="accent" x2="1" y2="1">
+      <stop stop-color="#6ee7df"/>
+      <stop offset="1" stop-color="#72abff"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#2c99a7" stop-opacity=".28"/>
+      <stop offset="1" stop-color="#2c99a7" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="460" rx="24" fill="url(#background)"/>
+  <ellipse cx="1080" cy="310" rx="380" ry="320" fill="url(#glow)"/>
+  <path d="M0 390H1280M724 0V460" stroke="#83b4d4" stroke-opacity=".07"/>
+  <g font-family="Microsoft YaHei, PingFang SC, Noto Sans CJK SC, sans-serif">
+    <rect x="64" y="52" width="30" height="25" rx="6" fill="none" stroke="url(#accent)" stroke-width="2"/>
+    <path d="M64 60H94M72 70L77 66M72 70L77 74M82 74H88" fill="none" stroke="#87e6e3" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="108" y="73" fill="#a4c9dc" font-size="17" letter-spacing="2">DSH COMMUNITY PLUGIN</text>
+    <text x="61" y="150" fill="#f1f7ff" font-size="53" font-weight="700">DeepSeek 网页通道</text>
+    <text x="64" y="202" fill="#bed1e1" font-size="25">在熟悉的网页里，让 dsh 继续完成任务。</text>
+    <g font-size="16" fill="#d8f1f2">
+      <rect x="64" y="249" width="172" height="43" rx="21.5" fill="#18384b" stroke="#31556b"/>
+      <circle cx="86" cy="270" r="4" fill="#6ee7df"/>
+      <text x="101" y="276">独立浏览器登录态</text>
+      <rect x="249" y="249" width="155" height="43" rx="21.5" fill="#18384b" stroke="#31556b"/>
+      <circle cx="271" cy="270" r="4" fill="#83b7ff"/>
+      <text x="286" y="276">半自动 / 全自动</text>
+      <rect x="417" y="249" width="140" height="43" rx="21.5" fill="#18384b" stroke="#31556b"/>
+      <circle cx="439" cy="270" r="4" fill="#b1b6ff"/>
+      <text x="454" y="276">可选交付审核</text>
+    </g>
+    <text x="64" y="344" fill="#f0f6fc" font-size="19">输入包名安装，登录即可开始。</text>
+    <text x="64" y="414" fill="#85a7bd" font-size="16">dsh-deepseek-web-littlecar30</text>
+    <rect x="756" y="88" width="448" height="284" rx="18" fill="#041320" fill-opacity=".45"/>
+    <rect x="774" y="68" width="442" height="296" rx="17" fill="#f4f8fc"/>
+    <path d="M791 68H1199Q1216 68 1216 85V114H774V85Q774 68 791 68" fill="#e4edf5"/>
+    <circle cx="796" cy="91" r="4" fill="#a9bacb"/>
+    <circle cx="811" cy="91" r="4" fill="#a9bacb"/>
+    <circle cx="826" cy="91" r="4" fill="#a9bacb"/>
+    <rect x="851" y="78" width="271" height="25" rx="7" fill="#f6f9fc"/>
+    <text x="872" y="95" fill="#526c83" font-size="13">chat.deepseek.com</text>
+    <text x="802" y="146" fill="#486078" font-size="13">真实网页 · 流程示意</text>
+    <rect x="802" y="166" width="204" height="48" rx="13" fill="#e5edf6"/>
+    <text x="820" y="196" fill="#284159" font-size="17">从 dsh 发送你的任务</text>
+    <rect x="857" y="229" width="331" height="68" rx="13" fill="#d9efef"/>
+    <circle cx="880" cy="250" r="5" fill="#258b91"/>
+    <text x="895" y="256" fill="#164f56" font-size="17" font-weight="600">返回最终结果 / 工具调用</text>
+    <path d="M878 276H1083M1100 276H1148" stroke="#89bfc3" stroke-width="5" stroke-linecap="round"/>
+    <path d="M802 316H1188" stroke="#dce7ef"/>
+    <text x="802" y="343" fill="#648094" font-size="13">可选审核</text>
+    <text x="879" y="343" fill="#324e65" font-size="14">DeepSeek · Kimi · GLM</text>
+    <text x="792" y="414" fill="#85a7bd" font-size="14">真实浏览器发送请求，网页回复接回 dsh。</text>
+  </g>
+</svg>

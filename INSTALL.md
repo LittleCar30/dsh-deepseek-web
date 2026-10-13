@@ -62,7 +62,7 @@ node node_modules/dsh-deepseek-web-littlecar30/tools/browser-keeper.mjs --port 9
 半自动模型仍需在临时标签点击发送；自动模型自动发送。内部请求不执行工具，也不参与交付审核。
 压缩完成后，工作标签会建立接续对话，接收检查点与近期消息。
 网页明确报告截断或中断时不会按正常完成提交；网站不报告原因时无法保证识别所有截断。
-更多恢复条件、限制与排查步骤见 README 的“0.2.12：上下文压缩与任务接续”。
+更多恢复条件、限制与排查步骤见 [进阶文档](docs/ADVANCED.md#context-recovery)。
 
 ## 可选审核
 
