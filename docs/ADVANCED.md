@@ -7,7 +7,7 @@
 已配置 dsh CLI 时，可以用官方插件管理命令安装同一个包：
 
 ```bash
-dsh plugin --profile desktop add https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.13/dsh-deepseek-web-littlecar30-0.2.13.tgz
+dsh plugin --profile desktop add https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.14/dsh-deepseek-web-littlecar30-0.2.14.tgz
 ```
 
 仅在需要手工管理 profile 时，把以下字段合并到现有清单，保留原有依赖和 bundles：
@@ -15,7 +15,7 @@ dsh plugin --profile desktop add https://github.com/LittleCar30/dsh-deepseek-web
 ```json
 {
   "dependencies": {
-    "dsh-deepseek-web-littlecar30": "https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.13/dsh-deepseek-web-littlecar30-0.2.13.tgz"
+    "dsh-deepseek-web-littlecar30": "https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.14/dsh-deepseek-web-littlecar30-0.2.14.tgz"
   },
   "dsh": {
     "profile": {
@@ -82,6 +82,7 @@ User-Agent 或额外 HTTP 请求头。网页看到的 UA、Client Hints、Cookie
 | `sendMode` | `manual` | 人工点击发送；`approved` 预留给宿主审批流 |
 | `model` | `deepseek-web` | 网页模型开关校准目标 |
 | `liveThinking` | `false` | 是否展示网页真实思考；正文不混入思考块，不改变网页思考模式 |
+| `compactionLanguage` | `task` | 官方压缩摘要跟随用户任务语言；`host` 保留宿主要求，`zh` / `en` 固定中英文 |
 | `maxToolResultChars` | `6000` | 工具结果送入网页模型的字符上限，按头尾截断；不截断最终正文或网页委托结果 |
 | `streamIdleTimeoutMs` | `600000` | 网页流空闲超时 |
 | `rateLimit.enabled` | `true` | 是否自动处理“发送过于频繁” |
@@ -151,8 +152,9 @@ dsh 的上下文压缩会发起 `purpose: compaction` 辅助调用。已核查�
 旧版已生成/写入的摘要或文件不会被自动改写，也不能保证从不完整的宿主历史恢复丢失事实。
 
 半自动模型的辅助请求仍需在临时标签人工点击发送；`deepseek-web-auto` 自动发送。
-请求串行执行以避免输入和回复混用。临时标签使用同一网站登录态，摘要语言仍由宿主指令决定；
-插件不会把所有英文回复一律过滤。
+请求串行执行以避免输入和回复混用。临时标签使用同一网站登录态；0.2.14 起，已识别的官方
+压缩模板默认跟随用户任务语言，`compactionLanguage: host` 可恢复宿主英文模板。
+标题、自定义辅助指令和已有检查点保持原样。浏览器标题和日志会显示辅助请求用途。
 
 网页明确报告输出上限时，辅助请求返回 `max-tokens`，由 dsh 拒绝不完整摘要；
 正常任务报 `WEB_REPLY_TRUNCATED`，不作为完整交付提交。网页报告中断或传输失败时会报错。
@@ -162,3 +164,28 @@ dsh 的上下文压缩会发起 `purpose: compaction` 辅助调用。已核查�
 
 故障排查可对照 dsh 会话日志中的 `compaction/start`、`compaction/summary`、`compaction/end`
 与后续普通助手回复，并记录 dsh/插件版本和网页对应回复；不要只凭回复语言判断来源。
+
+## 0.2.14：工具调用恢复与压缩参数
+
+DeepSeek 网页偶发返回 DSML 标签形式的原生工具调用。旧版只解析 JSON，会把这些标签作为
+正文返回并结束任务。0.2.14 兼容完整 DSML 调用，多动作全部解析成功后才进入相同的本地
+白名单和参数校验。截断、非法参数或纠错后仍无法解析时明确失败，保留原会话游标以便重试。
+网页累计用量没有可靠的输入/输出分类，因此只保留通道累计统计，宿主用量面板可能不再显示
+这些数值；不能把累计总量当成输出 token。
+
+已核查的 dsh 0.2.0-rc.2 默认压缩预留 `headroomTokens: 65536`，在网页模型 128000 上下文、
+16000 输出预留下，实际阈值为 `min(128000 × 0.8, 128000 - 16000 - 65536) = 46464`。
+工具 schema 也计入压力。顶部 compaction 插件开关不一定控制 standard 预设的隔离 compaction。
+
+可选配置工具会在实际 agent preset 内写入仅针对 `deepseek-web` 路由的策略：
+`thresholdRatio: 0.8`、`headroomTokens: 8192`、摘要 `maxTokens: 4096`。相同预算下阈值为
+102400。它保留其他模型策略和已有预设，并先备份 profile patch；不自动修改所有安装者的预设。
+源码版本和发行包均可运行：
+
+```powershell
+node tools/configure-web-compaction.mjs --profile "$env:USERPROFILE\.dsh\profiles\desktop" --asar "D:\DeepSeek Harness\resources\app.asar"
+```
+
+按实际安装路径调整 `--asar`；CLI 安装可用 `--runtime-root <dsh包目录>`，其他预设用
+`--preset <预设id>`。重启 dsh 后生效。宿主仍会在需要压缩时生成临时摘要对话，检查点变化后
+重建工作网页上下文；这不会新建 dsh 会话。网页是否严格遵循摘要输出预算由站点决定。

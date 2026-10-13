@@ -157,6 +157,14 @@ try {
   const scoped = buildAuxiliaryPrompt(options([context, toolCall, result,
     { role: 'user', content: [{ type: 'text', text: directive }] }], { purpose: 'compaction' }))
   assert.ok(!scoped.includes(goal), '不能偷用主网页中范围之外的历史')
+  assert.ok(buildAuxiliaryPrompt(options([user, { role: 'user', content: [{ type: 'text', text: directive }] }],
+    { purpose: 'compaction' }), 'task').includes('language of the latest real user task'))
+  assert.ok(buildAuxiliaryPrompt(options([user, { role: 'user', content: [{ type: 'text', text: directive }] }],
+    { purpose: 'compaction' }), 'zh').includes('Write concise Chinese engineering prose.'))
+  assert.ok(buildAuxiliaryPrompt(options([user, { role: 'user', content: [{ type: 'text', text: directive }] }],
+    { purpose: 'compaction' }), 'host').includes('Write concise English engineering prose.'))
+  assert.ok(buildAuxiliaryPrompt(options([{ role: 'user', content: [{ type: 'text', text: 'Custom English summary instruction' }] }],
+    { purpose: 'compaction' }), 'zh').includes('Custom English summary instruction'))
   const titleRequest = options([{ id: 'title-1', role: 'user', source: { kind: 'dsh-session-title-llm' },
     content: [{ type: 'text', text: '给这个用户任务起标题：修订中文流程包' }] }],
   { purpose: 'session-title', system: '只返回一个中文会话标题' })

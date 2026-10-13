@@ -17,7 +17,7 @@
 ```bash
 npm login --auth-type=web --registry=https://registry.npmjs.org
 npm whoami --registry=https://registry.npmjs.org
-npm publish ./dsh-deepseek-web-littlecar30-0.2.13.tgz --access public --tag latest --registry=https://registry.npmjs.org
+npm publish ./dsh-deepseek-web-littlecar30-0.2.14.tgz --access public --tag latest --registry=https://registry.npmjs.org
 ```
 
 登录应在保持运行的交互终端中完成；临时登录链接失效时重新发起登录。

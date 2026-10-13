@@ -309,12 +309,14 @@ export class DeepSeekWebAdapter extends LlmAdapter {
       throw new LlmError('当前浏览器通道不支持隔离辅助请求，请升级通道实现。', 'WEB_AUXILIARY_UNSUPPORTED')
     }
     await this.sessions.load()
+    console.info(`[deepseek-web] 内部辅助请求开始：${options.purpose}；使用临时网页对话，结束后关闭。`)
     const reply = await this.channel.turnIsolated({
       sessionId: options.sessionId ?? 'anonymous',
       model: options.model,
-      text: buildAuxiliaryPrompt(options),
+      text: buildAuxiliaryPrompt(options, this.config.compactionLanguage),
       initialize: true,
       autoSend: options.model === 'deepseek-web-auto',
+      purpose: options.purpose,
       signal: options.signal,
     })
     options.signal?.throwIfAborted()
@@ -329,9 +331,10 @@ export class DeepSeekWebAdapter extends LlmAdapter {
       const totals = this.sessions.addChannelTokens(reply.accumulatedUsage)
       this.onUsage?.(totals)
       await this.sessions.save()
-      yield { type: 'usage', usage: { inputTokens: 0, outputTokens: reply.accumulatedUsage, totalTokens: reply.accumulatedUsage } }
+      // 网页仅提供累计总量，不能伪报为输出 token；保留独立通道统计。
     }
     // 原样文本返回：即使摘要里包含 actions 示例，也不能变成可执行工具调用。
+    console.info(`[deepseek-web] 内部辅助请求结束：${options.purpose}；摘要供宿主使用，普通任务状态保持。`)
     for (const chunk of replyChunks({ hasActions: false, actions: [], text: reply.text })) {
       yield chunk.type === 'finish' && reply.finishReason === 'max-tokens'
         ? { type: 'finish', reason: { kind: 'max-tokens' } } : chunk
@@ -379,6 +382,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
 
     // 初始化只更新本轮快照；完整结果被消费后再提交持久状态。
     if (rendered.prompt.initialize) {
+      if (savedState.initialized) console.info('[deepseek-web] 宿主上下文或页面归属变化，重建工作网页对话并回放检查点；继续原 dsh 会话。')
       this.channel.resetConversationGate()
       state.initialized = true
       state.usageBaseline = 0
@@ -506,19 +510,13 @@ export class DeepSeekWebAdapter extends LlmAdapter {
         '[deepseek-web] 本地审查拒绝执行，模型原始输出：',
         reply.text.slice(0, 800),
       )
-      yield {
-        type: 'finish',
-        reason: {
-          kind: 'error',
-          failure: {
-            message: `本地审查拒绝执行：${
-              problems.map(item => `actions[${item.index}]${item.tool ? ` (${item.tool})` : ''} ${item.problem}`).join('；')
-            }`,
-            code: 'WEB_ACTION_REJECTED',
-          },
-        },
-      }
-      return
+      throw new LlmError(`本地审查拒绝执行：${
+        problems.map(item => `actions[${item.index}]${item.tool ? ` (${item.tool})` : ''} ${item.problem}`).join('；')
+      }`, 'WEB_ACTION_REJECTED')
+    }
+
+    if (!parsed.hasActions && delegatedActions.length === 0 && looksLikeIntendedToolReply(reply.text)) {
+      throw new LlmError('网页工具调用格式仍无法完整解析，未作为最终交付提交；请重试当前任务。', 'MALFORMED_TOOL_CALL')
     }
 
     // 网页委托：把委托动作转成下一轮提示词，交给网页端自带能力执行（如联网搜索/网页阅读），
@@ -642,6 +640,10 @@ export class DeepSeekWebAdapter extends LlmAdapter {
     if (!parsed.hasActions && looksLikeUnfinishedHandoff(parsed.text, state.goalText ?? '')) {
       throw new LlmError('网页仍返回未完成的任务交接摘要，未作为最终交付提交；请重试当前任务。', 'WEB_UNFINISHED_HANDOFF')
     }
+    if (problems.length > 0) throw new LlmError('审核修正后的工具调用未通过本地校验。', 'WEB_ACTION_REJECTED')
+    if (!parsed.hasActions && looksLikeIntendedToolReply(parsed.text)) {
+      throw new LlmError('网页仍返回无法解析的工具调用，未作为最终交付提交。', 'MALFORMED_TOOL_CALL')
+    }
 
     // 网页对话（含审核）完全结束、正文即将交给 Harness 呈现给用户时：
     // 半自动——取消网页置顶并把 dsh 窗口带到最前；全自动——焦点全程留在 dsh，不动窗口。
@@ -671,9 +673,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
         `[deepseek-web] 本轮 token 用量：${usageDeltaSum}（网页会话累计 ${String(state.usageBaseline)}），`
         + `通道总计：${totals.totalTokens} tokens / ${totals.usageTurns} 轮`,
       )
-      if (usageDeltaSum > 0) {
-        yield { type: 'usage', usage: { inputTokens: 0, outputTokens: usageDeltaSum, totalTokens: usageDeltaSum } }
-      }
+      // 无输入/输出分类的网页总量只进入通道统计，不进入宿主 TokenUsage。
     }
 
     yield* replyChunks(parsed, { startIndex: blocks.next, nextCallId: 1 })

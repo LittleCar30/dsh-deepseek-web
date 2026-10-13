@@ -34,6 +34,8 @@ export interface BrowserTurnRequest {
   onProgress?: (progress: BrowserTurnProgress) => void
   /** 同对话自审不能改变工作页面所属的正常 session。 */
   preserveConversation?: boolean
+  /** 临时内部请求用途，用于浏览器标题提示。 */
+  purpose?: string
 }
 
 export interface BrowserTurnResult {

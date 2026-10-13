@@ -103,7 +103,7 @@ export function repairAndValidateActions(
     const tool = action.tool ?? action.action
     const schema = tool ? toolSchemas?.get(tool) : undefined
     const params = action.params ?? action.arguments
-    if (!schema || !params || typeof params !== 'object' || params === null) return action
+    if (!schema || !params || typeof params !== 'object' || Array.isArray(params)) return action
     return {
       ...action,
       params: repairParams(params as Record<string, unknown>, schema),
@@ -132,7 +132,7 @@ export function validateActions(
       problems.push({ index, tool, problem: `工具 "${tool}" 不在本轮可用工具清单中` })
     }
     const params = action.params ?? action.arguments
-    if (params !== undefined && (typeof params !== 'object' || params === null)) {
+    if (params !== undefined && (typeof params !== 'object' || params === null || Array.isArray(params))) {
       problems.push({ index, tool, problem: 'arguments 必须是 JSON 对象' })
       return
     }
@@ -220,13 +220,43 @@ export function extractJsonObject(text: string): unknown | undefined {
 
 function normalizeParams(action: WebToolAction): Record<string, unknown> {
   const params = action.params ?? action.arguments ?? {}
-  return typeof params === 'object' && params !== null
-    ? params as Record<string, unknown>
-    : { value: params }
+  // 保留非法类型，交由校验拒绝，不能伪装成合法对象。
+  return params as Record<string, unknown>
+}
+
+/** DeepSeek 偶发忽略 JSON 协议，返回原生 DSML；必须完整匹配，禁止执行半截调用。 */
+function parseDsml(text: string): WebToolAction[] | undefined {
+  const candidate = text.replace(/^```(?:xml|dsml)?\s*([\s\S]*?)```$/i, '$1').trim()
+  const calls = candidate.match(/^<｜｜DSML｜｜\s+calls>\s*([\s\S]*?)\s*<\/｜｜DSML｜｜\s+calls>$/)
+  if (!calls) return undefined
+  let rest = calls[1]!.trim()
+  const actions: WebToolAction[] = []
+  while (rest) {
+    const invoke = rest.match(/^<｜｜DSML｜｜\s+invoke\s+name="([^"]+)">\s*([\s\S]*?)<\/｜｜DSML｜｜\s+invoke>/)
+    if (!invoke) return undefined
+    let parameters = invoke[2]!.trim()
+    const params: Record<string, unknown> = Object.create(null)
+    while (parameters) {
+      const parameter = parameters.match(/^<｜｜DSML｜｜\s+parameter\s+name="([^"]+)"\s+string="(true|false)">([\s\S]*?)<\/｜｜DSML｜｜\s+parameter>/)
+      if (!parameter || Object.hasOwn(params, parameter[1]!)) return undefined
+      try {
+        params[parameter[1]!] = parameter[2] === 'true' ? parameter[3]! : JSON.parse(parameter[3]!)
+      } catch { return undefined }
+      parameters = parameters.slice(parameter[0].length).trim()
+    }
+    actions.push({ tool: invoke[1]!, params })
+    rest = rest.slice(invoke[0].length).trim()
+  }
+  return actions.length ? actions : undefined
 }
 
 export function parseWebReply(text: string): ParsedWebReply {
   const trimmed = text.trim()
+  if (/<\/?[｜|]{2}DSML[｜|]{2}/.test(trimmed)) {
+    const actions = parseDsml(trimmed)
+    // DSML 中的 JSON 参数不能被误解析成另一个顶层动作。
+    return { hasActions: !!actions, actions: actions ?? [], text: trimmed }
+  }
   const parsed = extractJsonObject(trimmed)
   if (parsed && typeof parsed === 'object') {
     const obj = parsed as Record<string, unknown>
@@ -234,7 +264,10 @@ export function parseWebReply(text: string): ParsedWebReply {
     const actions: WebToolAction[] = []
     if (Array.isArray(rawActions)) {
       for (const item of rawActions) {
-        if (typeof item === 'object' && item !== null) actions.push(item as WebToolAction)
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+          return { hasActions: false, actions: [], text: trimmed }
+        }
+        actions.push(item as WebToolAction)
       }
     } else if (typeof rawActions === 'object' && rawActions !== null) {
       actions.push(rawActions as WebToolAction)
@@ -265,14 +298,15 @@ export function parseWebReply(text: string): ParsedWebReply {
 
 /**
  * 判断一段“没有解析出动作”的回复是否明显是想调用工具但格式坏了：
- * 空回复、带 JSON 围栏、或出现了 JSON 形态的动作字段。
+ * 空回复、完整回复中的动作信封或原生 DSML 标签。
  */
 export function looksLikeIntendedToolReply(text: string): boolean {
   const trimmed = text.trim()
   if (trimmed.length === 0) return true
-  if (/^```(?:json)?/im.test(trimmed)) return true
-  if (/["']?(?:actions|tool|action)["']?\s*:/i.test(trimmed)) return true
-  if (/^[[{]/.test(trimmed) && /["']?(?:actions|tool|action)["']?\s*:/i.test(trimmed)) return true
+  if (/<\/?[｜|]{2}DSML[｜|]{2}/.test(trimmed)) return true
+  // 最终报告可以包含 JSON 代码示例；仅拦截整条回复的动作信封。
+  const candidate = trimmed.replace(/^```(?:json)?\s*([\s\S]*?)(?:```)?$/i, '$1').trim()
+  if (/^\{\s*["']?(?:actions|tool|action)["']?\s*:/i.test(candidate)) return true
   return false
 }
 

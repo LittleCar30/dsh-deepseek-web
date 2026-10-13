@@ -573,7 +573,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
       if (!matchesCompletionUrl(response.url())) return false
       return true
     }, { timeout: this.options.config.streamIdleTimeoutMs }).then(async response => {
-      await this.markPageStatus(page, '[dsh 网页生成中]').catch(() => {})
+      await this.markPageStatus(page, request.purpose ? `[dsh 内部辅助：${request.purpose} 生成中]` : '[dsh 网页生成中]').catch(() => {})
       const interrupted = await response.finished().then(error => error !== null, () => true)
       const body = await response.body().catch(() => '')
       if (!waiterActive) return undefined
@@ -654,7 +654,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
         // 全自动：输入框已聚焦（editor.click），模拟回车发送；不动窗口焦点，dsh 全程在前
         await editor.focus()
         await page.keyboard.press('Enter')
-        await this.markPageStatus(page, '[dsh 自动发送中]')
+        await this.markPageStatus(page, request.purpose ? `[dsh 内部辅助：${request.purpose} 自动发送]` : '[dsh 自动发送中]')
         console.info('[deepseek-web] 全自动：已输入并回车发送…')
       } else {
         // 半自动：网页窗口置顶到屏幕最上方并聚焦输入框，用户直接回车或点击发送
@@ -664,7 +664,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
           await setBrowserWindowTopmost({ profileDir: this.profileDir, topmost: true }).catch(() => {})
         }
         await editor.focus()
-        await this.markPageStatus(page, '[dsh 等待你在网页点击发送]')
+        await this.markPageStatus(page, request.purpose ? `[dsh 内部辅助：${request.purpose} 等待点击发送]` : '[dsh 等待你在网页点击发送]')
         console.info('[deepseek-web] 消息已填入 Edge 并置顶聚焦，请回车或点击“发送”…')
       }
 

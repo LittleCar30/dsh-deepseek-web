@@ -146,6 +146,8 @@ export interface Config {
   review: ReviewConfig
   /** 模型疑似想调工具但输出无法解析时，自动注入纠错并请求重试一次。 */
   autoCorrectMalformed: boolean
+  /** 官方压缩模板的摘要语言；host 保留宿主原始要求。 */
+  compactionLanguage: 'task' | 'host' | 'zh' | 'en'
   /**
    * 网页委托工具（提示词代执行）：目录里声明给网页模型，调用不本地执行，
    * 而是转成下一轮提示词交给网页端自带能力完成（如 web_search / web_fetch）。
@@ -235,7 +237,6 @@ const schema = z.object({
     'bash',
     'pwsh',
     'todo_write',
-    'mcp__taptap-maker__*',
   ])),
   excludeToolNames: markVolatile(z.array(z.string()).default(['web_search'])),
   compactToolCatalog: z.boolean().default(true),
@@ -262,6 +263,7 @@ const schema = z.object({
     glmProfileDir: z.string(),
   }).default({}),
   autoCorrectMalformed: z.boolean().default(true),
+  compactionLanguage: markVolatile(z.union(['task', 'host', 'zh', 'en']).default('task')),
   delegatedTools: markVolatile(z.array(z.string()).default(['web_search', 'web_fetch'])),
 })
 
