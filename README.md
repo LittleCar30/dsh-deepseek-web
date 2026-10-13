@@ -9,7 +9,7 @@
 - 注册 `deepseek-web` provider，把 dsh 的消息转换为网页端对话。
 - 使用用户安装的真实 Edge 或 Chrome 窗口，默认用独立 `managed` profile；也支持 CDP `attach`。
 - 保留人工点击发送的确认点（`sendMode: manual`），避免插件自动替用户提交网页请求。
-- 将网页端的文本、思考流、JSON 工具动作、频控和 token 用量转换回 dsh 格式。
+- 将网页端正文、JSON 工具动作、频控和 token 用量转换回 dsh 格式；默认不展示思考过程。
 - 在上下文过长时建立新的网页对话，并携带任务简报继续执行。
 - 通过 dsh 的插件设置页修改配置；客户端侧提供配置页和对话视图空白自愈。
 - 可选在同一 DeepSeek 对话中自审，或通过独立浏览器窗口使用 Kimi / GLM 审核。
@@ -40,13 +40,13 @@ npm install dsh-deepseek-web
 从 Release 下载 `dsh-deepseek-web-*.tgz` 后，在 dsh 的插件或 profile 目录执行：
 
 ```bash
-npm install /path/to/dsh-deepseek-web-0.2.10.tgz
+npm install /path/to/dsh-deepseek-web-0.2.11.tgz
 ```
 
 Windows PowerShell 示例：
 
 ```powershell
-npm install .\dsh-deepseek-web-0.2.10.tgz
+npm install .\dsh-deepseek-web-0.2.11.tgz
 ```
 
 ### Desktop profile 安装
@@ -56,7 +56,7 @@ npm install .\dsh-deepseek-web-0.2.10.tgz
 ```json
 {
   "dependencies": {
-    "dsh-deepseek-web": "^0.2.10"
+    "dsh-deepseek-web": "^0.2.11"
   },
   "dsh": {
     "profile": {
@@ -132,7 +132,8 @@ User-Agent 或额外 HTTP 请求头。网页看到的 UA、Client Hints、Cookie
 | `debugPort` | `9333` | attach 模式端口；managed 模式的首选端口，冲突时自动选择空闲端口 |
 | `sendMode` | `manual` | 人工点击发送；`approved` 预留给宿主审批流 |
 | `model` | `deepseek-web` | 网页模型开关校准目标 |
-| `liveThinking` | `true` | 是否实时转发思考增量 |
+| `liveThinking` | `false` | 是否展示网页真实思考；正文不混入思考块，不改变网页思考模式 |
+| `maxToolResultChars` | `6000` | 工具结果送入网页模型的字符上限，按头尾截断；不截断最终正文或网页委托结果 |
 | `streamIdleTimeoutMs` | `600000` | 网页流空闲超时 |
 | `rateLimit.enabled` | `true` | 是否自动处理“发送过于频繁” |
 | `rateLimit.maxRetries` | `5` | 单轮频控重试次数 |
@@ -145,6 +146,18 @@ User-Agent 或额外 HTTP 请求头。网页看到的 UA、Client Hints、Cookie
 
 完整字段和默认值见 [`src/config.ts`](src/config.ts)。配置文件中的 profile、状态和
 校准数据默认保存在 `%LOCALAPPDATA%\DshDeepSeekWeb\`，不会写入插件安装目录。
+
+### 只返回结果与长回复
+
+从 0.2.11 起，`liveThinking` 默认关闭，dsh 只输出最终正文或工具调用。
+如果旧配置显式保存了 `liveThinking: true`，升级后仍会展示思考，请在插件配置中
+关闭“显示网页思考过程”，或在 patch 的 `config` 中设置 `liveThinking: false`。
+此设置不会关闭 DeepSeek 网页自身的思考模式，也不会删除已有对话里的思考记录。
+
+手动开启后，思考块仅展示网页真实思考，回答正文和工具调用 JSON 不再混入思考块。
+网页委托（如 `web_search` / `web_fetch`）返回的正文会完整展示，不再因超过
+6000 字符而丢失末尾结论。`maxToolResultChars` 仍用于限制送入网页模型的工具结果，
+审核证据的长度限制也继续生效。网页自身的生成或上下文长度上限仍由站点决定。
 
 ## 审核通道
 
@@ -188,7 +201,7 @@ npm pack
 
 `npm run build` 生成 `lib/index.js`（host ESM）和 `lib/client.js`（web client bundle）。
 解析器自测不访问网络，覆盖 DeepSeek SSE、Kimi Connect-RPC / gzip、GLM SSE、工具动作、
-审核证据、频控、用量和 handoff 逻辑。需要真实网页时，再使用 `tools/` 下的登录和检查脚本。
+审核证据、频控、用量、handoff、思考展示与长委托回复逻辑。需要真实网页时，再使用 `tools/` 下的登录和检查脚本。
 
 ## 卸载
 

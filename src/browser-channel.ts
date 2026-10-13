@@ -28,8 +28,8 @@ export interface BrowserTurnRequest {
   autoSend?: boolean
   signal?: AbortSignal
   /**
-   * 实时进度回调（可选）：网页端流式生成期间按增量触发，供适配层把内容
-   * 作为思考流（reasoning 块）展示。支持与否取决于通道实现。
+   * 实时进度回调（可选）：网页端流式生成期间按增量触发；适配层仅在开启
+   * liveThinking 时把 reasoning 作为思考块展示。支持与否取决于通道实现。
    */
   onProgress?: (progress: BrowserTurnProgress) => void
 }

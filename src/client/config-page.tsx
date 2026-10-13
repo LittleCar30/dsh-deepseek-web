@@ -65,7 +65,7 @@ const FIELDS: readonly FieldSpec[] = [
 
   { path: ['model'], label: '网页版模型入口', kind: 'select', options: ['deepseek-web', 'deepseek-web-auto'] },
   { path: ['sendMode'], label: '发送模式', hint: 'manual = 每条消息填入后由你点击发送；approved 为预留。', kind: 'select', options: ['manual', 'approved'] },
-  { path: ['liveThinking'], label: '实时思考流', hint: '把网页端的流式增量作为思考块实时展示。', kind: 'boolean' },
+  { path: ['liveThinking'], label: '显示网页思考过程', hint: '默认关闭，只返回最终正文或工具调用；开启后展示网页真实思考，不重复展示正文。此设置不改变网页的思考模式。', kind: 'boolean' },
 
   { path: ['rateLimit', 'enabled'], label: '频控自动重发', hint: '网页提示「发送过于频繁」时等待后自动重发同一条。', kind: 'boolean' },
   { path: ['rateLimit', 'retryDelayMs'], label: '重发等待（毫秒）', kind: 'number', min: 1000 },
@@ -81,7 +81,7 @@ const FIELDS: readonly FieldSpec[] = [
 
   { path: ['protocolEveryRequest'], label: '每轮都注入协议', hint: '开启后每条消息都带完整控制协议；代价是提示词更长。', kind: 'boolean' },
   { path: ['protocolRefreshEvery'], label: '协议刷新间隔（轮）', hint: '未开启「每轮都注入」时，每隔这么多轮重新注入一次控制协议快照。', kind: 'number', min: 1 },
-  { path: ['maxToolResultChars'], label: '工具结果截断（字符）', kind: 'number', min: 256 },
+  { path: ['maxToolResultChars'], label: '工具结果输入上限（字符）', hint: '只限制送入网页模型的工具结果；最终正文和网页委托结果完整展示。', kind: 'number', min: 256 },
   { path: ['url'], label: 'DeepSeek 网页地址', kind: 'text' },
   { path: ['debugPort'], label: 'CDP 调试端口', hint: 'attach 模式使用此端口；managed 模式把它作为首选端口，冲突时自动选择空闲端口。', kind: 'number', min: 1024, max: 65535 },
 ]

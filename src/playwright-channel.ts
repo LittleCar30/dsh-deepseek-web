@@ -705,7 +705,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
     page: Page,
     request: BrowserTurnRequest,
   ): Promise<NodeJS.Timeout | undefined> {
-    if (this.options.config.liveThinking === false) return undefined
+    if (this.options.config.liveThinking !== true) return undefined
     await this.ensureCapture(page)
     const startedAt = Date.now() - 1_000
     const onProgress = request.onProgress

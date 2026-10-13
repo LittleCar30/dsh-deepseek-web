@@ -91,7 +91,6 @@ class TurnProgressPipe {
   /** 把一次网页增量翻译成 reasoning 流 chunk。 */
   pushProgress(progress: BrowserTurnProgress, index: number): void {
     if (progress.reasoning) this.push({ type: 'reasoning-delta', index, text: progress.reasoning })
-    if (progress.text) this.push({ type: 'reasoning-delta', index, text: progress.text })
   }
 
   /** 等待下一次 push（buffer 为空时阻塞；push 会同步唤醒）。 */
@@ -172,8 +171,8 @@ export class DeepSeekWebAdapter extends LlmAdapter {
   }
 
   /**
-   * 驱动一轮网页对话：等待回复期间，把网页端的流式增量作为 reasoning 块
-   * 实时 yield 给 Harness（思考流），而不是只在回合结束时一次性给出。
+   * 驱动一轮网页对话：仅在用户开启 liveThinking 时，把网页真实思考增量
+   * 作为 reasoning 块实时 yield 给 Harness；正文在解析后单独输出。
    *
    * `blocks.next` 是本次 stream() 内下一个空闲内容块序号：每次 driveTurn
    * 消耗一个 reasoning 块并自增；调用方最后把它作为正文/工具块的起始序号，
@@ -190,13 +189,12 @@ export class DeepSeekWebAdapter extends LlmAdapter {
     const turnPromise = this.channel.turn({
       ...request,
       onProgress: (progress) => {
-        if (this.config.liveThinking === false) return
+        if (this.config.liveThinking !== true || !progress.reasoning) return
         if (!opened) {
           opened = true
           pipe.push({ type: 'block-start', index: reasoningIndex, blockType: 'reasoning' })
-          pipe.push({ type: 'reasoning-delta', index: reasoningIndex, text: '⏳ 网页版生成中（实时）：\n' })
         }
-        reasoningText += progress.reasoning + progress.text
+        reasoningText += progress.reasoning
         pipe.pushProgress(progress, reasoningIndex)
       },
     }).then(
@@ -477,15 +475,14 @@ export class DeepSeekWebAdapter extends LlmAdapter {
         usageDeltaSum += this.accountUsage(outcome, state, false)
         usageObserved = usageObserved || outcome.accumulatedUsage !== undefined
         const outcomeParsed = parseWebReply(outcome.text)
-        const body = outcomeParsed.text.length > this.config.maxToolResultChars
-          ? `${outcomeParsed.text.slice(0, this.config.maxToolResultChars)}…（委托结果过长，已截断）`
-          : outcomeParsed.text
-        sections.push(`[${name} 委托结果]\n${body}`)
+        // maxToolResultChars 只限制送入网页模型的工具结果，不截断用户收到的正文。
+        sections.push(`[${name} 委托结果]\n${outcomeParsed.text}`)
         delegatedChars += prompt.length + outcome.text.length
         delegatedTurns += 1
       }
       if (sections.length > 0) {
-        parsed = { ...parsed, text: `${parsed.text}\n\n---\n${sections.join('\n\n')}` }
+        // 原回复是委托动作 JSON，交付时只显示委托结果。
+        parsed = { ...parsed, text: sections.join('\n\n') }
       }
     }
 

@@ -122,8 +122,8 @@ export interface Config {
     maxRetries: number
   }
   /**
-   * 实时思考流：网页版生成过程中的增量内容（思考 + 正文）作为 reasoning 块
-   * 流式展示在 Harness 对话里，不再只等结束时一次性给出。
+   * 实时思考流：默认关闭；开启时仅把网页真实思考增量作为 reasoning 块
+   * 流式展示在 Harness 对话里，不包含回答正文，也不控制网页思考开关。
    */
   liveThinking: boolean
   /** 最大回复字节数保护。 */
@@ -138,7 +138,7 @@ export interface Config {
   excludeToolNames: string[]
   /** 工具目录使用精简描述（名称 + 一句用途 + 必填参数），默认开。 */
   compactToolCatalog: boolean
-  /** 单个工具结果送入网页模型的最大字符数，超出按头尾截断。 */
+  /** 单个工具结果送入网页模型的最大字符数，超出按头尾截断；不限制最终正文。 */
   maxToolResultChars: number
   /** 任务锚点最大字符数，防止超长任务每轮重复灌入。 */
   maxGoalChars: number
@@ -221,7 +221,7 @@ const schema = z.object({
     retryDelayMs: markVolatile(z.number().step(1).min(1_000).default(30_000)),
     maxRetries: markVolatile(z.number().step(1).min(0).default(5)),
   }).default({}),
-  liveThinking: markVolatile(z.boolean().default(true)),
+  liveThinking: markVolatile(z.boolean().default(false)),
   maxReplyBytes: z.number().step(1).min(1024).default(4 * 1024 * 1024),
   protocolRefreshEvery: markVolatile(z.number().step(1).min(1).default(8)),
   protocolEveryRequest: markVolatile(z.boolean().default(false)),

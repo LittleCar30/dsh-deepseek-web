@@ -8,7 +8,7 @@
 ```bash
 npm install dsh-deepseek-web
 # 或
-npm install /path/to/dsh-deepseek-web-0.2.10.tgz
+npm install /path/to/dsh-deepseek-web-0.2.11.tgz
 ```
 
 建议把包安装在桌面版使用的 Node/npm 环境中，使 `@deepseek-ai/cordis`、
@@ -21,7 +21,7 @@ npm install /path/to/dsh-deepseek-web-0.2.10.tgz
 
 ```json
 {
-  "dependencies": { "dsh-deepseek-web": "^0.2.10" },
+  "dependencies": { "dsh-deepseek-web": "^0.2.11" },
   "dsh": { "profile": { "bundles": ["dsh-deepseek-web"] } }
 }
 ```
@@ -48,6 +48,10 @@ node node_modules/dsh-deepseek-web/tools/browser-keeper.mjs --port 9333
 ```
 
 启动桌面版后，模型选择 `deepseek-web`；默认发送模式需要用户在网页中人工点击“发送”。
+
+0.2.11 起默认只输出最终正文或工具调用。若旧配置开启了实时思考流，升级后请在
+插件配置中关闭“显示网页思考过程”（`liveThinking: false`）。这只控制 dsh 展示，
+不改变网页思考模式；网页委托正文不再受 6000 字符的工具输入上限影响。
 
 ## 4. 可选审核
 
