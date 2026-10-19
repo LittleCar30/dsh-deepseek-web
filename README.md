@@ -10,7 +10,7 @@
 
 [![npm](https://img.shields.io/npm/v/dsh-deepseek-web-littlecar30?style=flat-square&color=168c92&label=npm)](https://www.npmjs.com/package/dsh-deepseek-web-littlecar30) [![Release](https://img.shields.io/github/v/release/LittleCar30/dsh-deepseek-web?style=flat-square&color=477cce&label=release)](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest) [![License](https://img.shields.io/badge/license-MIT-69798b?style=flat-square)](LICENSE) [![DSH](https://img.shields.io/badge/DSH-community_plugin-6b74b4?style=flat-square)](https://github.com/deepseek-ai/deepseek-harness)
 
-[快速安装](#quick-start) · [功能一览](#features) · [工作原理](#how-it-works) · [常见问题](#faq) · [更新记录](CHANGELOG.md)
+[快速安装](#quick-start) · [功能一览](#features) · [工作原理](#how-it-works) · [常见问题](#faq) · [更新记录](CHANGELOG.md) · [赞助支持](#sponsor)
 
 </div>
 
@@ -221,5 +221,20 @@ RELEASING.md         维护者发布流程
 
 通过 [GitHub Issues](https://github.com/LittleCar30/dsh-deepseek-web/issues) 提供插件与 dsh 版本、
 使用的发送模式、复现步骤，以及相关错误或最后一段回复。日志中的登录凭证请先隐藏。
+
+<a id="sponsor"></a>
+## 赞助支持
+
+**项目免费开源，赞助完全自愿，不影响任何功能的使用。**
+
+如果这个插件帮你省下了时间，欢迎通过微信扫码支持作者，鼓励后续维护与功能改进。
+金额随心，感谢每一份支持！点亮 Star、分享项目和反馈问题，同样是很好的支持方式。
+
+<p align="center">
+  <a href="docs/assets/wechat-sponsor.jpg">
+    <img src="docs/assets/wechat-sponsor.jpg" alt="微信扫码赞助支持作者小汽车" width="320">
+  </a>
+</p>
+<p align="center">使用微信扫一扫；手机访问时可点击图片查看原图，保存后在微信中识别二维码。</p>
 
 项目按 [MIT License](LICENSE) 开源。
