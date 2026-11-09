@@ -1,6 +1,6 @@
 # DSH 与 DeepSeek 网页兼容性验证
 
-验证日期：2026-11-09。插件版本：0.2.15。本记录描述发布前完成的兼容性验证。
+验证日期：2026-11-09。插件版本：0.2.15 / 0.2.16。核心兼容性测试针对 0.2.15；0.2.16 补充详情页与本机旧预设修复验证。
 
 ## 验证目标
 
@@ -38,9 +38,23 @@
 
 REA 配置包分析证据：`ev_3d839f5579b07534cd915ac1c12b232a0d9a8ad43b0f28f1b9efeff37d75a4ca`，只支持静态结论。登录后页面观察证据：`ev_b7315baa694198ccb012563ad7375d90148ea1ece1655528995e4acc93fcc083`；真实生成行为以本地测试报告为准。
 
-## 安装 0.2.15
+## 新建会话失败的配置修复
 
-在桌面版「插件 → 添加插件」中粘贴 `dsh-deepseek-web-littlecar30@0.2.15`，安装源选择 npm 官方源，安装后启用并重启。也可从 [GitHub Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/tag/v0.2.15) 下载相同的 `.tgz`，通过本地完整路径安装。已安装旧版时，按宿主提供的卸载/重装流程更换；先记下自定义设置，保留浏览器登录数据。
+用户遇到 `agent-preset/invalid: tool-subagent-list-agents (@deepseek-ai/dsh-tool-subagent-control/list-agents): never started`。实际 DSH 0.2.2-rc.1 包的 `exports` 已不提供 `./list-agents`，主入口现在一起注册 `list_agents`、`send_message`、`interrupt_agent`。本机 `preset-standard → delegation` 同时保留主入口和旧子入口，导致加载器导入失败，预设审计随后拒绝创建会话。
+
+修复前已备份本机 `cordis.patch.yml`，仅删除旧入口的两行声明，共 113 字节。保留主入口、所有个人预设及其他配置，未改模型路由或工具权限。结构比较确认其他配置一致；用户随后确认**新建会话成功**。备份仅保存在本机，不上传含个人配置的文件。
+
+`tools/host-subagent-compat-check.mjs` 使用安装包提取的真实 Cordis 加载器：复现 `ERR_PACKAGE_PATH_NOT_EXPORTED` 和无 fiber 的旧行；删除该行后主入口加载成功，三种工具均注册，实际 `list_agents` handler 通过服务替身执行。该脚本不创建桌面会话、不启动真实子代理；桌面恢复结论来自用户确认。此问题发生在宿主预设加载阶段，插件不自动修改其他用户的宿主预设。
+
+REA 静态证据：`ev_e98f98b53d808df5d21b36d185630ea3bb90ba07761eecaeb85669416e384d9d`，目标为实际 `dsh-tool-subagent-control` 包；动态加载结论来自上述独立验证脚本。
+
+## 0.2.16 插件详情
+
+实际宿主 `dsh-plugin-detail` 优先读取 locale 的 `meta.detail`。新增 `locale/zh.json`、`en.json` 与短 Markdown 说明，保留完整 README。直接调用实际宿主解析器验证：`zh-CN` / `zh-TW` 选择中文详情，`en` / `en-GB` 选择英文，`fr-FR` 回退英文；无 locale 时仍回退 README。发行清单包含短详情且排除用户未提交的博客草稿。
+
+## 安装 0.2.16
+
+在桌面版「插件 → 添加插件」中粘贴 `https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.16/dsh-deepseek-web-littlecar30-0.2.16.tgz`，安装后启用并重启。也可从 [GitHub Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/tag/v0.2.16) 下载 `.tgz`，通过本地完整路径安装。npm 公开最新版仍为 0.2.14；0.2.15 / 0.2.16 发布等待维护者恢复双重验证。已安装旧版时，按宿主提供的卸载/重装流程更换；先记下自定义设置，保留浏览器登录数据。
 
 进入「DeepSeek 网页版通道 → llm-deepseek-web → 配置」，按需选择发送方式。如需使用新增工具，点击「使用宿主全部工具」并保存；已有白名单不会被静默覆盖。
 
@@ -50,6 +64,7 @@ REA 配置包分析证据：`ev_3d839f5579b07534cd915ac1c12b232a0d9a8ad43b0f28f1
 npm test
 npm run build
 node tools/settings-host-check.mjs <提取的实际dsh目录>
+node tools/host-subagent-compat-check.mjs <提取的实际dsh目录>
 npx tsx tools/host-tool-compat-check.ts <实际dsh/node_modules/@deepseek-ai目录>
 # 下列命令会在已登录专用浏览器中真实发送测试消息：
 npx tsx tools/live-browser-check.ts <实际dsh/node_modules/@deepseek-ai目录> 9333

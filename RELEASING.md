@@ -17,7 +17,7 @@
 ```bash
 npm login --auth-type=web --registry=https://registry.npmjs.org
 npm whoami --registry=https://registry.npmjs.org
-npm publish ./dsh-deepseek-web-littlecar30-0.2.15.tgz --access public --tag latest --registry=https://registry.npmjs.org
+npm publish ./dsh-deepseek-web-littlecar30-0.2.16.tgz --access public --tag latest --registry=https://registry.npmjs.org
 ```
 
 登录应在保持运行的交互终端中完成；临时登录链接失效时重新发起登录。
@@ -39,3 +39,5 @@ npm view dsh-deepseek-web-littlecar30 version dist-tags repository dist.integrit
 
 `gh release view` 核对版本、提交和资产；本地安装包 SHA256 应与 GitHub 资产 digest 一致。
 不要把推送代码、创建 GitHub Release 和发布 npm 混称为一次已经完成的发布。
+
+2026-11-09：GitHub 已发布 0.2.15，0.2.16 包含精简详情与旧预设排查记录。npm 公开最新版仍为 0.2.14，因维护者无法使用原双重验证凭据而暂缓发布；账号恢复前不重复发起登录。发行包明确排除个人草稿 `docs/BLOG.zh-CN.md`，打包后仍需检查清单。

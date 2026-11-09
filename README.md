@@ -21,18 +21,19 @@
 普通桌面版用户无需安装 Node.js、下载源码或手改配置文件。
 
 1. 打开 dsh 左侧栏 **插件 → 添加插件**。
-2. 粘贴下面包名，安装源选择 **npm 官方源**，点击 **安装**。
+2. 粘贴下面的 GitHub 安装包链接，点击 **安装**。
 3. 安装后点击 **立即启用**，然后重启 dsh。
 4. 选择 `deepseek-web`，在自动打开的浏览器窗口登录 DeepSeek；网页填入消息后，点击发送。
 
 ```text
-dsh-deepseek-web-littlecar30
+https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.16/dsh-deepseek-web-littlecar30-0.2.16.tgz
 ```
 
-当前正式版为 **0.2.15**。需要固定版本时，填 `dsh-deepseek-web-littlecar30@0.2.15`。
+当前 GitHub 发行版为 **0.2.16**。npm 最新仍为 **0.2.14**；维护者正在恢复双重验证，暂未发布 0.2.15 / 0.2.16 到 npm，请使用上面的链接或本地 `.tgz` 安装新版。
 希望消息填入后自动发送，可改选 `deepseek-web-auto`。
 
 **0.2.15 已适配 DSH 0.2.2-rc.1**，重做配置页并修复最新网页解析。
+0.2.16 将桌面插件详情改为简短说明，补充升级后旧 `list-agents` 预设入口导致新建会话失败的排查方法。
 验证范围、升级注意事项和已知限制见 [兼容性验证记录](docs/COMPATIBILITY-2026-11-09.md)。
 
 > [!IMPORTANT]
@@ -47,13 +48,13 @@ dsh-deepseek-web-littlecar30
 在同一个「添加插件」输入框粘贴发行包链接，也可以安装：
 
 ```text
-https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.15/dsh-deepseek-web-littlecar30-0.2.15.tgz
+https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.16/dsh-deepseek-web-littlecar30-0.2.16.tgz
 ```
 
 或从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest) 下载 `.tgz`，粘贴文件的完整绝对路径，例如：
 
 ```text
-C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.15.tgz
+C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.16.tgz
 ```
 
 发行包已包含 host/client 编译产物。安装依赖仍需要网络；镜像尚未同步时选择 npm 官方源。
@@ -167,7 +168,7 @@ dsh 的内部压缩请求可能要求生成英文交接摘要，它应作为后�
 先确认包名是 `dsh-deepseek-web-littlecar30`，安装源选择 npm 官方源。
 安装后点击「立即启用」并重启；在插件页检查 `llm-deepseek-web` 是否启用、有没有错误。
 
-如果下载 GitHub 链接失败，可改用 npm 包名安装。
+如果下载 GitHub 链接失败，可从 Release 下载 `.tgz`，再通过本地完整路径安装。npm 包名目前只能安装到 0.2.14。
 [更多安装排查](INSTALL.md#其他安装入口与常见问题)。
 
 </details>

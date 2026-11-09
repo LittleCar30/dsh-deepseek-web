@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DeepSeek Web Channel",
+    "description": "Connect a signed-in DeepSeek browser session to dsh tasks and tools through Edge or Chrome.",
+    "detail": "locale/detail.en.md"
+  }
+}

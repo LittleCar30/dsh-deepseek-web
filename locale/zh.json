@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "DeepSeek 网页版通道",
+    "description": "通过已登录的 Edge / Chrome 网页使用 DeepSeek，接入 dsh 任务和工具。",
+    "detail": "locale/detail.zh.md"
+  }
+}
