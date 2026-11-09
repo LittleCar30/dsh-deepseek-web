@@ -14,6 +14,13 @@
 export const WEB_MODEL_IDS = ['deepseek-web', 'deepseek-web-auto'] as const
 export type WebModelId = typeof WEB_MODEL_IDS[number]
 
+/** A saved sending preference overrides the selected model only when explicit. */
+export function resolveAutoSend(sendMode: string, model: string): boolean {
+  if (sendMode === 'auto') return true
+  if (sendMode === 'manual') return false
+  return model === 'deepseek-web-auto'
+}
+
 /** 网页版模型能力说明（模式由页面控制，字段仅用于展示）。 */
 export interface WebModelCapability {
   /** 页面默认提供深度思考能力。 */

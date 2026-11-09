@@ -37,6 +37,8 @@ export interface WebChatState {
   checkpointSignature?: string
   /** 已发送的宿主系统指令指纹。 */
   systemSignature?: string
+  /** 上次发送的工具目录指纹；新增/停用工具时立即刷新协议。 */
+  toolSignature?: string
 }
 
 /** 通道级 token 用量总计（跨 dsh 会话持久，随 session-state.json 保存）。 */
@@ -114,6 +116,7 @@ export class SessionRegistry {
             ...rawState.contextVersion === undefined ? {} : { contextVersion: rawState.contextVersion },
             ...rawState.checkpointSignature === undefined ? {} : { checkpointSignature: rawState.checkpointSignature },
             ...rawState.systemSignature === undefined ? {} : { systemSignature: rawState.systemSignature },
+            ...rawState.toolSignature === undefined ? {} : { toolSignature: rawState.toolSignature },
           })
         }
       }

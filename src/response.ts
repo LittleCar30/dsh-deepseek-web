@@ -68,6 +68,8 @@ const PARAM_ALIASES: Record<string, readonly string[]> = {
   pattern: ['pattern', 'glob', 'glob_pattern', 'query'],
   old_str: ['old_str', 'old_string', 'old', 'oldText'],
   new_str: ['new_str', 'new_string', 'new', 'newText'],
+  old_string: ['old_string', 'old_str', 'old', 'oldText'],
+  new_string: ['new_string', 'new_str', 'new', 'newText'],
 }
 
 /** 按 schema 必填名做别名替换，返回修复后的参数对象。 */

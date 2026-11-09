@@ -29,8 +29,11 @@
 dsh-deepseek-web-littlecar30
 ```
 
-当前正式版为 **0.2.14**。需要固定版本时，填 `dsh-deepseek-web-littlecar30@0.2.14`。
+当前正式版为 **0.2.15**。需要固定版本时，填 `dsh-deepseek-web-littlecar30@0.2.15`。
 希望消息填入后自动发送，可改选 `deepseek-web-auto`。
+
+**0.2.15 已适配 DSH 0.2.2-rc.1**，重做配置页并修复最新网页解析。
+验证范围、升级注意事项和已知限制见 [兼容性验证记录](docs/COMPATIBILITY-2026-11-09.md)。
 
 > [!IMPORTANT]
 > 本项目的 npm 包名是 **`dsh-deepseek-web-littlecar30`**。
@@ -44,13 +47,13 @@ dsh-deepseek-web-littlecar30
 在同一个「添加插件」输入框粘贴发行包链接，也可以安装：
 
 ```text
-https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.14/dsh-deepseek-web-littlecar30-0.2.14.tgz
+https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.15/dsh-deepseek-web-littlecar30-0.2.15.tgz
 ```
 
 或从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest) 下载 `.tgz`，粘贴文件的完整绝对路径，例如：
 
 ```text
-C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.14.tgz
+C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.15.tgz
 ```
 
 发行包已包含 host/client 编译产物。安装依赖仍需要网络；镜像尚未同步时选择 npm 官方源。
@@ -81,6 +84,7 @@ C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.14.tgz
 
 这是**发送方式的区别**，不是两个不同的大模型。思考与联网开关由网页自身管理。
 模式不会改变 dsh 对本地工具的权限与审批设置。
+0.2.15 起，配置页「消息发送方式」默认跟随上述模型入口，也可强制选择半自动或全自动，保存后从下一轮生效。
 
 ### 在哪里调整设置？
 
@@ -89,6 +93,9 @@ C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.14.tgz
 - **只看结果**：关闭「显示网页思考过程」，即 `liveThinking: false`，这也是默认值。
 - **选择浏览器**：`channel: msedge` 使用 Edge；`channel: chrome` 使用 Chrome。
 - **开启审核**：打开 `review.enabled`，选择 `deepseek-web`、`kimi` 或 `glm`。
+- **使用新版工具**：在「工具范围」中点击「使用宿主全部工具」，然后保存，清除旧版本留下的工具白名单。宿主权限和审批仍然生效。
+
+![新版中文配置页：发送方式选择卡、浏览器和审核开关](docs/assets/config-page.png)
 
 审核默认关闭。DeepSeek 自审不需要额外浏览器；Kimi / GLM 需要先在对应独立窗口登录。
 [查看完整配置与审核准备](docs/ADVANCED.md#审核通道)。

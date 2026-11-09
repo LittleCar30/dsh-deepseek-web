@@ -7,7 +7,7 @@
 已配置 dsh CLI 时，可以用官方插件管理命令安装同一个包：
 
 ```bash
-dsh plugin --profile desktop add https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.14/dsh-deepseek-web-littlecar30-0.2.14.tgz
+dsh plugin --profile desktop add https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.15/dsh-deepseek-web-littlecar30-0.2.15.tgz
 ```
 
 仅在需要手工管理 profile 时，把以下字段合并到现有清单，保留原有依赖和 bundles：
@@ -15,7 +15,7 @@ dsh plugin --profile desktop add https://github.com/LittleCar30/dsh-deepseek-web
 ```json
 {
   "dependencies": {
-    "dsh-deepseek-web-littlecar30": "https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.14/dsh-deepseek-web-littlecar30-0.2.14.tgz"
+    "dsh-deepseek-web-littlecar30": "https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.15/dsh-deepseek-web-littlecar30-0.2.15.tgz"
   },
   "dsh": {
     "profile": {

@@ -14,6 +14,6 @@
         url: 'https://chat.deepseek.com'
         browser: managed
         channel: msedge
-        sendMode: manual
+        sendMode: model
         review:
           provider: deepseek-web

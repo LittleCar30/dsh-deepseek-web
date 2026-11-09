@@ -28,10 +28,11 @@ export function normalizeWebModel(model: string): WebModelId | undefined {
 
 /**
  * 发送模式：
- * - `manual`：驱动把消息填入输入框并聚焦浏览器窗口，由用户点击发送（默认，最稳妥）
- * - `approved`：由 Harness 审批流确认后程序化点击发送（后续实现）
+ * - `model`：跟随宿主选择的半自动 / 全自动模型入口（默认）
+ * - `manual` / `auto`：覆盖模型入口，强制人工 / 自动发送
+ * - `approved`：兼容旧配置，仍跟随模型入口；不代表宿主已批准任何操作
  */
-export type SendMode = 'manual' | 'approved'
+export type SendMode = 'model' | 'manual' | 'auto' | 'approved'
 
 /** 可选的审核通道配置；默认关闭，关闭时行为与只用 DeepSeek 完全一致。 */
 export type ReviewProvider = 'kimi' | 'deepseek-web' | 'glm'
@@ -208,13 +209,13 @@ function markVolatile<T extends { volatile?: () => unknown; extra?: (key: 'volat
 const schema = z.object({
   url: markVolatile(z.string().default('https://chat.deepseek.com')),
   // 默认由插件启动独立浏览器；attach 保留给需要复用外部 CDP 浏览器的高级用户。
-  browser: z.union(['managed', 'attach']).default('managed'),
-  channel: z.union(['msedge', 'chrome']).default('msedge'),
+  browser: markVolatile(z.union(['managed', 'attach']).default('managed')),
+  channel: markVolatile(z.union(['msedge', 'chrome']).default('msedge')),
   debugPort: markVolatile(z.number().step(1).min(1024).max(65535).default(9333)),
   autoStartKeeper: z.boolean().default(true),
   stateFile: z.string(),
-  profileDir: z.string(),
-  sendMode: markVolatile(z.union(['manual', 'approved']).default('manual')),
+  profileDir: markVolatile(z.string()),
+  sendMode: markVolatile(z.union(['model', 'manual', 'auto', 'approved']).default('model')),
   model: markVolatile(z.union([...WEB_MODEL_IDS]).default('deepseek-web')),
   selectors: z.dict(z.string()),
   streamIdleTimeoutMs: z.number().step(1).min(1).default(600_000),
@@ -227,17 +228,8 @@ const schema = z.object({
   maxReplyBytes: z.number().step(1).min(1024).default(4 * 1024 * 1024),
   protocolRefreshEvery: markVolatile(z.number().step(1).min(1).default(8)),
   protocolEveryRequest: markVolatile(z.boolean().default(false)),
-  toolAllowlist: markVolatile(z.array(z.string()).default([
-    'read',
-    'write',
-    'edit',
-    'str_replace_editor',
-    'glob',
-    'grep',
-    'bash',
-    'pwsh',
-    'todo_write',
-  ])),
+  // 工具由宿主按当前任务提供；不固化旧版本工具名，以支持新增工具及 MCP。
+  toolAllowlist: markVolatile(z.array(z.string()).default([])),
   excludeToolNames: markVolatile(z.array(z.string()).default(['web_search'])),
   compactToolCatalog: z.boolean().default(true),
   maxToolResultChars: markVolatile(z.number().step(1).min(256).default(6_000)),

@@ -19,6 +19,7 @@ import type { BrowserChannel, BrowserTurnRequest, BrowserTurnResult } from './br
 import type { Config, WebModelId } from './config.ts'
 import { WEB_MODEL_CAPABILITIES } from './config.ts'
 import { AsyncLock } from './async-lock.ts'
+import { resolveAutoSend } from './web-models.ts'
 import {
   bestEffortNewChat,
   connectBrowser,
@@ -140,24 +141,36 @@ export function parseCompletionBody(body: string): {
     }
   }
 
-  function lastFragmentIndex(): number {
-    for (let i = fragments.length - 1; i >= 0; i--) {
-      if ((fragments[i]?.type ?? '').toUpperCase() !== 'THINK') return i
-    }
-    return fragments.length - 1
-  }
-
-  function applyPatch(payload: Record<string, unknown>): void {
-    const pointer = typeof payload.p === 'string' ? payload.p : lastPatchPath
-    const op = typeof payload.o === 'string' ? payload.o : lastPatchOp
+  function applyPatch(payload: Record<string, unknown>, parent?: string): void {
+    const rawPath = typeof payload.p === 'string' ? payload.p : parent === undefined ? lastPatchPath : undefined
+    if (rawPath === undefined) return
+    const path = rawPath.replace(/^\//, '')
+    const pointer = parent && !rawPath.startsWith('/') && path !== 'response' && !path.startsWith('response/')
+      ? `${parent}/${path}` : path
+    // BATCH 子项是相对于父路径的新补丁，不继承外层的 BATCH 操作。
+    const op = typeof payload.o === 'string' ? payload.o.toUpperCase() : parent === undefined ? lastPatchOp : 'SET'
     const value = payload.v
-    if (!pointer) return
-    lastPatchPath = pointer
-    lastPatchOp = op
+    if (parent === undefined) {
+      lastPatchPath = pointer
+      lastPatchOp = op
+    }
+
+    if (op === 'BATCH' && Array.isArray(value)) {
+      for (const item of value) {
+        if (item && typeof item === 'object' && !Array.isArray(item)) applyPatch(item, pointer)
+      }
+      return
+    }
 
     if (pointer === 'response/finish_reason') observeFinish(value)
+    if (pointer === 'response/accumulated_token_usage') observeUsage(value)
+    if (pointer === 'response' && value && typeof value === 'object' && !Array.isArray(value)) {
+      collectFullResponse({ v: { response: value } })
+      return
+    }
 
-    if (pointer === 'response/fragments' && op === 'APPEND' && Array.isArray(value)) {
+    if (pointer === 'response/fragments' && (op === 'APPEND' || op === 'SET') && Array.isArray(value)) {
+      if (op === 'SET') fragments.length = 0
       for (const fragment of value as LiveFragment[]) {
         if (fragment && typeof fragment === 'object' && typeof fragment.content === 'string') {
           upsertFragment(fragment, 'replace')
@@ -166,21 +179,15 @@ export function parseCompletionBody(body: string): {
       return
     }
 
-    if (pointer === 'response/fragments/-1/content') {
-      const index = lastFragmentIndex()
-      if (index >= 0 && typeof value === 'string') {
-        const fragment = fragments[index]!
-        fragment.content += value
-      }
-      return
-    }
-
-    // BATCH 补丁：{"p":"response","o":"BATCH","v":[{"p":"accumulated_token_usage","v":N},…]}
-    // 目前只提取 token 用量，其余子补丁不影响正文重建。
-    if (op === 'BATCH' && Array.isArray(value)) {
-      for (const item of value as Array<{ p?: unknown; v?: unknown }>) {
-        if (item && item.p === 'accumulated_token_usage') observeUsage(item.v)
-        if (item && item.p === 'finish_reason') observeFinish(item.v)
+    const fragmentPath = pointer.match(/^response\/fragments\/(-?\d+)\/(content|type)$/)
+    if (fragmentPath && typeof value === 'string') {
+      const rawIndex = Number(fragmentPath[1])
+      const index = rawIndex < 0 ? fragments.length + rawIndex : rawIndex
+      const fragment = fragments[index]
+      if (fragment) {
+        if (fragmentPath[2] === 'type') fragment.type = value
+        else if (op === 'APPEND') fragment.content += value
+        else if (op === 'SET') fragment.content = value
       }
       return
     }
@@ -337,14 +344,16 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
   /** 页面原始标题，用于状态标记前缀的清除/还原。 */
   private readonly originalTitles = new WeakMap<Page, string>()
   private readonly options: PlaywrightChannelOptions
-  private readonly profileDir: string
+  private connectedProfileDir: string | undefined
   private managedConnection: ManagedBrowserConnection | undefined
 
   constructor(options: PlaywrightChannelOptions) {
     this.options = options
-    this.profileDir = options.profileDir
-      ?? options.config.profileDir
-      ?? defaultProfileDir('edge-profile')
+  }
+
+  private get profileDir(): string {
+    return this.connectedProfileDir ?? this.options.profileDir
+      ?? (this.options.config.profileDir?.trim() || defaultProfileDir('edge-profile'))
   }
 
   async ensureReady(): Promise<void> {
@@ -357,6 +366,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
       return
     }
 
+    this.connectedProfileDir = this.profileDir
     if (this.options.config.browser === 'attach') {
       // 连接（必要时自动拉起）浏览器常驻守护，逻辑集中在 browser-shared 的 connectBrowser
       const { browser, context } = await connectBrowser({
@@ -563,7 +573,7 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
   > {
     const autoSend = request.autoSend
       ?? this.autoSendSessions.get(request.sessionId)
-      ?? this.options.config.sendMode === 'approved'
+      ?? resolveAutoSend(this.options.config.sendMode, request.model)
 
     // 提前挂监听，防止用户在我们填完后立刻点击发送导致漏掉响应。
     // 频控重发时旧 waiter 用 waiterActive 作废，避免迟到响应串扰下一轮。
@@ -896,10 +906,12 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
   }
 
   async dispose(): Promise<void> {
-    if (this.options.config.browser === 'attach') return
     const managed = this.managedConnection
     this.managedConnection = undefined
     await managed?.browser.close().catch(() => {})
+    // A CDP-attached Browser closes this client's connection while the external
+    // browser stays open. Release it even if the saved connection mode changed.
+    if (!managed) await this.browser?.close().catch(() => {})
     // browser.close() normally terminates the real browser. The launcher handle
     // is kept as a fallback for startup failures or browsers that ignore CDP close.
     if (managed?.process && !managed.process.killed) managed.process.kill()
@@ -908,5 +920,6 @@ export class PlaywrightBrowserChannel implements BrowserChannel {
     this.page = undefined
     this.conversationStarted = false
     this.activeSessionId = undefined
+    this.connectedProfileDir = undefined
   }
 }

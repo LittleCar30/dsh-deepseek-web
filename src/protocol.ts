@@ -49,7 +49,25 @@ function firstSentence(text: string): string {
 function requiredParamNames(parameters: Record<string, unknown>): string[] {
   const required = parameters.required
   if (!Array.isArray(required)) return []
-  return required.filter((item): item is string => typeof item === 'string').slice(0, 8)
+  return required.filter((item): item is string => typeof item === 'string')
+}
+
+/** 精简说明文字，保留嵌套参数、可选项、枚举与 $ref，避免新工具只能靠猜参数。 */
+function compactSchema(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !['$comment', 'examples', 'title'].includes(key))
+    .map(([key, item]) => {
+      if (key === 'description' && typeof item === 'string') return [key, firstSentence(item)]
+      if (['properties', 'patternProperties', '$defs', 'definitions', 'dependentSchemas'].includes(key)
+        && item !== null && typeof item === 'object' && !Array.isArray(item)) {
+        return [key, Object.fromEntries(Object.entries(item).map(([name, spec]) => [name, compactSchema(spec)]))]
+      }
+      if (['anyOf', 'allOf', 'oneOf', 'prefixItems'].includes(key) && Array.isArray(item)) return [key, item.map(compactSchema)]
+      if (['items', 'additionalProperties', 'contains', 'not', 'if', 'then', 'else', 'propertyNames'].includes(key)) {
+        return [key, compactSchema(item)]
+      }
+      return [key, item]
+    }))
 }
 
 function toolSchemaText(tool: ToolSchema, compact: boolean): string {
@@ -61,7 +79,7 @@ function toolSchemaText(tool: ToolSchema, compact: boolean): string {
   const required = requiredParamNames(tool.parameters ?? {})
   return `- ${tool.name}：${firstSentence(tool.description ?? '')}${
     required.length > 0 ? `（必填: ${required.join(', ')}）` : ''
-  }`
+  }${tool.parameters ? `\n  参数: ${JSON.stringify(compactSchema(tool.parameters))}` : ''}`
 }
 
 export function buildToolCatalog(tools?: ToolSchema[], compact = true): string {
@@ -142,6 +160,16 @@ export function toolResultToWebMessage(
   const head = callName ? `工具 ${callName} 的执行结果` : '工具执行结果'
   const failed = message.isError === true ? '（执行失败）' : ''
   return `${head}${failed}${callArgs ? `（参数: ${callArgs.slice(0, 800)}）` : ''}：\n${body}`
+}
+
+/** 批量工具结果按宿主 callId 关联；旧消息没有 id 时才按调用顺序回退。 */
+function takeToolCall(message: unknown, pending: ContentBlock[]): ContentBlock | undefined {
+  const result = message as { toolCallId?: unknown; source?: { callId?: unknown } }
+  const callId = result.toolCallId ?? result.source?.callId
+  const index = typeof callId === 'string'
+    ? pending.findIndex(block => block.type === 'tool-call' && block.id === callId)
+    : 0
+  return index < 0 ? undefined : pending.splice(index, 1)[0]
 }
 
 function clampGoal(text: string, maxChars: number): string {
@@ -275,7 +303,7 @@ export function buildHandoffBrief(
   let originalTask = ''
   let latestTask = ''
   let lastAssistantText = ''
-  let pendingCall: string | undefined
+  const pendingCalls: ContentBlock[] = []
   const filesTouched: string[] = []
   const recentResults: string[] = []
   let todos: Array<{ content: string; status: string }> = []
@@ -284,7 +312,7 @@ export function buildHandoffBrief(
     if (message.role === 'assistant') {
       for (const block of message.content) {
         if (block.type === 'tool-call') {
-          pendingCall = block.name
+          pendingCalls.push(block)
           if (block.name === 'todo_write') todos = parseTodos(block.arguments)
           if (/^(write|edit|str_replace_editor)$/.test(block.name)) {
             try {
@@ -302,7 +330,8 @@ export function buildHandoffBrief(
     // 工具结果：dsh 0.2 起是独立角色 `role: 'tool'`；0.1 时是 user 消息 + source.kind 'tool'。
     if (message.role === 'tool' || (message.role === 'user' && message.source?.kind === 'tool')) {
       const output = clampHandoff(message.content.map(block => blockToText(block)).join('\n'), 160)
-      recentResults.push(`${pendingCall ?? 'tool'}: ${output}`)
+      const call = takeToolCall(message, pendingCalls)
+      recentResults.push(`${call?.type === 'tool-call' ? call.name : 'tool'}: ${output}`)
       if (recentResults.length > 3) recentResults.shift()
       continue
     }
@@ -550,7 +579,7 @@ export function renderNewWebMessages(
   else if (state.goalText && isCompactionDirective(state.goalText)) state.goalText = undefined
 
   const parts: string[] = []
-  let lastToolCall: ContentBlock | undefined
+  const pendingCalls: ContentBlock[] = []
   if (replay || state.systemSignature !== systemSignature) {
     if (options.system) parts.push(`[宿主系统指令]\n${options.system}`)
     for (const message of systemMessages) parts.push(`[宿主系统指令]\n${replayText(message)}`)
@@ -559,16 +588,16 @@ export function renderNewWebMessages(
   for (let i = 0; i < messages.length; i++) {
     const message = messages[i]!
     if (message.role === 'assistant') {
-      lastToolCall = message.content.find(block => block.type === 'tool-call')
+      pendingCalls.push(...message.content.filter(block => block.type === 'tool-call'))
       if (i >= start && replay) parts.push(`[历史助手回复]\n${replayText(message)}`)
       continue
     }
-    if (i < start || ['system', 'developer'].includes(message.role)) continue
     if (message.role === 'tool' || sourceKind(message) === 'tool') {
-      parts.push(toolResultToWebMessage(lastToolCall, message, config.maxToolResultChars))
-      lastToolCall = undefined
+      const call = takeToolCall(message, pendingCalls)
+      if (i >= start) parts.push(toolResultToWebMessage(call, message, config.maxToolResultChars))
       continue
     }
+    if (i < start || ['system', 'developer'].includes(message.role)) continue
     const text = replayText(message)
     if (!text.trim()) continue
     if (isUserTask(message)) {
@@ -587,16 +616,18 @@ export function renderNewWebMessages(
     parts.push('请开始。')
   }
 
-  const needsRefresh = replay || needsProtocolNow(state, config)
   const delegatedCatalog = buildDelegatedCatalog(config.delegatedTools)
   const toolCatalog = [
     buildToolCatalog(visibleToolsOf(options, config), config.compactToolCatalog),
     delegatedCatalog,
   ].filter(Boolean).join('\n')
+  const toolSignature = fingerprint(toolCatalog)
+  const needsRefresh = replay || needsProtocolNow(state, config) || state.toolSignature !== toolSignature
   const text = parts.join('\n\n')
   state.contextVersion = CONTEXT_VERSION
   state.checkpointSignature = checkpointSignature
   state.systemSignature = systemSignature
+  state.toolSignature = toolSignature
 
   return {
     prompt: {

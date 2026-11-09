@@ -17,6 +17,7 @@ import type {
 } from '@deepseek-ai/dsh-llm'
 import type { BrowserChannel, BrowserTurnRequest, BrowserTurnProgress, BrowserTurnResult } from './browser-channel.ts'
 import type { Config, WebModelId } from './config.ts'
+import { resolveAutoSend } from './web-models.ts'
 import { normalizeWebModel, WEB_MODEL_CAPABILITIES, WEB_MODEL_IDS } from './config.ts'
 import type { ActionProblem, WebToolAction } from './response.ts'
 import {
@@ -315,7 +316,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
       model: options.model,
       text: buildAuxiliaryPrompt(options, this.config.compactionLanguage),
       initialize: true,
-      autoSend: options.model === 'deepseek-web-auto',
+      autoSend: resolveAutoSend(this.config.sendMode, options.model),
       purpose: options.purpose,
       signal: options.signal,
     })
@@ -355,7 +356,7 @@ export class DeepSeekWebAdapter extends LlmAdapter {
     }
     // 全自动模型（deepseek-web-auto）：填入后模拟回车发送，焦点全程留在 dsh；
     // 半自动（deepseek-web）：填入后网页置顶聚焦，等人工回车/点击。
-    const autoSend = model === 'deepseek-web-auto'
+    const autoSend = resolveAutoSend(this.config.sendMode, model)
     this.channel.setSessionAutoSend?.(sessionId, autoSend)
     this.channel.setSessionAutoSend?.('deepseek-self-review', autoSend)
 

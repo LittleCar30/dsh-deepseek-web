@@ -7,7 +7,7 @@
 
 1. 同步 `package.json` 与 `package-lock.json` 的版本，更新 README、INSTALL 和 CHANGELOG。
 2. 包名变更时，同步 `tsdown.config.ts` 的客户端模块 ID，以及配置页的 `PACKAGE_NAME`；两者必须与 manifest 一致。
-3. 执行 `npm run build`、`npm run test:parsers`、`npm pack --json`，检查压缩包包含 host/client、patch 和中文文档。
+3. 执行 `npm run build`、`npm test`、`npm pack --json`，检查压缩包包含 host/client、patch 和中文文档。
 4. 只有源码变更与构建产物一致、离线检查通过后，才提交并推送；真实网页测试是否执行应写明。
 
 ## npm 认证与发布
@@ -17,7 +17,7 @@
 ```bash
 npm login --auth-type=web --registry=https://registry.npmjs.org
 npm whoami --registry=https://registry.npmjs.org
-npm publish ./dsh-deepseek-web-littlecar30-0.2.14.tgz --access public --tag latest --registry=https://registry.npmjs.org
+npm publish ./dsh-deepseek-web-littlecar30-0.2.15.tgz --access public --tag latest --registry=https://registry.npmjs.org
 ```
 
 登录应在保持运行的交互终端中完成；临时登录链接失效时重新发起登录。

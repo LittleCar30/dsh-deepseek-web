@@ -1,6 +1,6 @@
 # 中文安装速查
 
-本项目发行包：`dsh-deepseek-web-littlecar30@0.2.14`，适用于 dsh 桌面版 0.2+。
+本项目发行包：`dsh-deepseek-web-littlecar30@0.2.15`，已验证 dsh 桌面版 0.2.2-rc.1。
 
 ## 新用户：在桌面版输入包名安装
 
@@ -10,7 +10,7 @@
 4. 选择 `deepseek-web`，在插件自动打开的 Edge 窗口登录 DeepSeek。
 
 ```text
-dsh-deepseek-web-littlecar30@0.2.14
+dsh-deepseek-web-littlecar30@0.2.15
 ```
 
 无需安装 Node.js、克隆源码或手改配置文件。安装包内已带 host/client 编译产物。
@@ -23,17 +23,19 @@ dsh-deepseek-web-littlecar30@0.2.14
 0.2.13 起包名为 `dsh-deepseek-web-littlecar30`，不要同时启用两者。
 卸载保留 `%LOCALAPPDATA%\DshDeepSeekWeb\` 中的浏览器登录态和运行数据；不用删除状态文件。
 安装后在新插件详情的 `llm-deepseek-web` 行点击 **配置**，检查自定义设置。
+0.2.15 的发送方式可选「跟随模型入口 / 半自动 / 全自动」，保存后下一轮生效；浏览器连接设置需重启。
+若旧白名单挡住新增工具，在「工具范围」点击 **使用宿主全部工具** 并保存；dsh 的权限与审批仍生效。
 
 ## 其他安装入口与常见问题
 
-- **GitHub 链接**：在「添加插件」粘贴 `https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.14/dsh-deepseek-web-littlecar30-0.2.14.tgz`。
+- **GitHub 链接**：在「添加插件」粘贴 `https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.15/dsh-deepseek-web-littlecar30-0.2.15.tgz`。
 - **本地安装包**：从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest) 下载 `.tgz`，
-  在「添加插件」输入框粘贴完整绝对路径，例如 `C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.14.tgz`。
-- **npm（已发布）**：[发行页](https://www.npmjs.com/package/dsh-deepseek-web-littlecar30)，在「添加插件」填 `dsh-deepseek-web-littlecar30@0.2.14`。
+  在「添加插件」输入框粘贴完整绝对路径，例如 `C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.15.tgz`。
+- **npm（已发布）**：[发行页](https://www.npmjs.com/package/dsh-deepseek-web-littlecar30)，在「添加插件」填 `dsh-deepseek-web-littlecar30@0.2.15`。
   刚发布时选 npm 官方源；中国大陆镜像源可能尚未同步。
 - **不能安装 `dsh-deepseek-web`**：npm 上这个名字属于另一位作者，不是本项目；务必使用完整新名字或本项目 Release 链接。
 - **下载失败**：安装界面展开「查看安装详情」查看原因。npm 镜像可帮助下载依赖，不能代替访问 GitHub。
-- **没有「添加插件」入口**：更新 dsh 桌面版；本流程已对照 0.2.0-rc.2 的插件管理说明。手工 profile/CLI 见 [README](README.md#命令行--手动-profile进阶)。
+- **没有「添加插件」入口**：更新 dsh 桌面版；本流程已对照 0.2.2-rc.1 的插件管理说明。手工 profile/CLI 见 [README](README.md#命令行--手动-profile进阶)。
 - **已安装但没生效**：确认点击过「立即启用」、没有同时启用旧包，并重启 dsh；插件页检查 `llm-deepseek-web` 的运行状态。
 
 ## 首次登录与模型选择

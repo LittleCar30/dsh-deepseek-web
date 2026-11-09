@@ -1,7 +1,7 @@
 {
   "name": "dsh-deepseek-web-littlecar30",
   "description": "DeepSeek Harness 桌面版网页通道插件：通过真实 Edge/Chrome 使用 DeepSeek 免费网页版，支持可选 Kimi/GLM 审核和中文配置页。",
-  "version": "0.2.14",
+  "version": "0.2.15",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -32,9 +32,9 @@
     "yaml": "^2.8.1"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/cordis": "~4.0.4 || ~4.1.0",
     "@deepseek-ai/dsh-llm": "*",
-    "@deepseek-ai/schemastery": "~3.18.4",
+    "@deepseek-ai/schemastery": "~3.18.4 || ~3.19.0",
     "react": ">=18"
   },
   "dsh": {
@@ -55,8 +55,10 @@
     "build": "npm run build:host && npm run build:client",
     "build:host": "tsdown --config tsdown.host.config.ts --config-loader tsx",
     "build:client": "tsdown --config tsdown.config.ts --config-loader tsx",
-    "test:parsers": "tsx tools/synthetic-parse-check.ts && tsx tools/kimi-parse-check.ts && tsx tools/kimi-gzip-check.ts && tsx tools/glm-parse-check.ts && tsx tools/action-repair-check.ts && tsx tools/review-evidence-check.ts && tsx tools/rate-limit-check.ts && tsx tools/usage-check.ts && tsx tools/handoff-check.ts && tsx tools/adapter-output-check.ts && tsx tools/compaction-check.ts && tsx tools/dsml-check.ts && node tools/compaction-config-check.mjs",
-    "pack": "npm pack"
+    "test:parsers": "tsx tools/synthetic-parse-check.ts && tsx tools/kimi-parse-check.ts && tsx tools/kimi-gzip-check.ts && tsx tools/glm-parse-check.ts && tsx tools/action-repair-check.ts && tsx tools/review-evidence-check.ts && tsx tools/rate-limit-check.ts && tsx tools/usage-check.ts && tsx tools/handoff-check.ts && tsx tools/adapter-output-check.ts && tsx tools/compaction-check.ts && tsx tools/dsml-check.ts && node tools/compaction-config-check.mjs && tsx tools/tool-compat-check.ts && tsx tools/send-mode-check.ts",
+    "pack": "npm pack",
+    "test:config": "tsx tools/config-page-check.ts",
+    "test": "npm run test:parsers && npm run test:config"
   },
   "devDependencies": {
     "react": "^19.1.1",
