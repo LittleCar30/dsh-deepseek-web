@@ -1,6 +1,6 @@
 # DSH 与 DeepSeek 网页兼容性验证
 
-验证日期：2026-11-09。插件版本：0.2.15 / 0.2.16。核心兼容性测试针对 0.2.15；0.2.16 补充详情页与本机旧预设修复验证。
+验证日期：2026-11-09。插件版本：0.2.15 / 0.2.16 / 0.2.17。核心兼容性测试针对 0.2.15；0.2.16 补充详情页与本机旧预设修复验证；0.2.17 修复客户端配置表单的只读误判。
 
 ## 验证目标
 
@@ -52,9 +52,19 @@ REA 静态证据：`ev_e98f98b53d808df5d21b36d185630ea3bb90ba07761eecaeb85669416
 
 实际宿主 `dsh-plugin-detail` 优先读取 locale 的 `meta.detail`。新增 `locale/zh.json`、`en.json` 与短 Markdown 说明，保留完整 README。直接调用实际宿主解析器验证：`zh-CN` / `zh-TW` 选择中文详情，`en` / `en-GB` 选择英文，`fr-FR` 回退英文；无 locale 时仍回退 README。发行清单包含短详情且排除用户未提交的博客草稿。
 
-## 安装 0.2.16
+## 0.2.17 配置页只读误判
 
-在桌面版「插件 → 添加插件」中粘贴 `https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.16/dsh-deepseek-web-littlecar30-0.2.16.tgz`，安装后启用并重启。也可从 [GitHub Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/tag/v0.2.16) 下载 `.tgz`，通过本地完整路径安装。npm 公开最新版仍为 0.2.14；0.2.15 / 0.2.16 发布等待维护者恢复双重验证。已安装旧版时，按宿主提供的卸载/重装流程更换；先记下自定义设置，保留浏览器登录数据。
+用户在本地桌面端遇到「当前连接不允许保存设置。请在拥有此插件的 dsh 桌面端编辑」。这条提示来自插件页面额外要求 `form.state.mode === 'host'`。实际 DSH 0.2.2-rc.1 的客户端 ConfigForms 快照为 `status / value / base / user / revision / writable`，没有 `mode`；即使宿主允许写入，页面也会禁用所有控件。
+
+0.2.17 按 `status === 'ready' && writable === true` 判断能否编辑，读取中、不可用与只读分别提示。此前 UI 测试壳人为补入了 `mode: host`，因此没覆盖此缺陷；本次改用实际客户端控制器生成的快照结构，没有添加该字段。
+
+扩展 `tools/settings-host-check.mjs`，执行提取安装包中的 `dsh-client-ui-settings/lib/client.js` 与实际宿主 SettingsForms：证明 ready+writable 快照不含 mode，客户端修改发送方式后能写入隔离 YAML、更新宿主 volatile 引用；陈旧 revision、非法数字、只读写入均拒绝。客户端 snapshot 存储、Remote 传输与配置编辑器使用隔离替身，未在用户设置中执行测试写入。真实 React / Edge 页面采用该控制器输出的快照结构，选择、开关、保存、错误保留草稿、冲突和只读检查通过；读取中与不可用状态也验证通过。未声称自动点击正在运行的 DSH 桌面窗口。
+
+实际客户端静态分析证据：`ev_878fa2340165365cd739e320af59e93f4e8abe7b52808d84b3afa155caa48657`。
+
+## 安装 0.2.17
+
+在桌面版「插件 → 添加插件」中粘贴 `https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.17/dsh-deepseek-web-littlecar30-0.2.17.tgz`，安装后启用并重启。也可从 [GitHub Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/tag/v0.2.17) 下载 `.tgz`，通过本地完整路径安装。npm 公开最新版仍为 0.2.14；后续新版发布等待维护者恢复双重验证。已安装旧版时，按宿主提供的卸载/重装流程更换；先记下自定义设置，保留浏览器登录数据。
 
 进入「DeepSeek 网页版通道 → llm-deepseek-web → 配置」，按需选择发送方式。如需使用新增工具，点击「使用宿主全部工具」并保存；已有白名单不会被静默覆盖。
 

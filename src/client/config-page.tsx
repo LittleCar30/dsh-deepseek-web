@@ -24,7 +24,10 @@ export function DeepSeekWebConfigPage({ view, form }: PluginConfigViewProps): JS
 
   const accepted = form?.state.value ?? {}
   const revision = form?.state.revision
-  const writable = form?.state.writable === true && form.state.mode === 'host'
+  // The host's ConfigForm reports readiness and write permission; newer DSH
+  // versions no longer include the old connection mode field.
+  const writable = form?.state.writable === true && form.state.status === 'ready'
+  const accessLabel = form?.state.status === 'ready' ? writable ? '设置可编辑' : '当前为只读' : form?.state.status === 'loading' ? '正在读取' : '配置不可用'
   const conflict = draft !== null && draft.revision !== revision
   const errors = draftErrors(draft)
   const changes = draftOperations(draft)
@@ -81,8 +84,8 @@ export function DeepSeekWebConfigPage({ view, form }: PluginConfigViewProps): JS
   }
 
   return <div className={`dsw-settings${writable ? '' : ' dsw-readonly'}`}><style>{CONFIG_PAGE_STYLE}</style>
-    <header className="dsw-heading"><div><p className="dsw-eyebrow">DEEPSEEK WEB</p><h2>让网页配合你的工作方式</h2><p>连接已登录的浏览器，使用 dsh 的任务与工具。</p></div><span className="dsw-badge"><span className="dsw-dot" />{writable ? '设置可编辑' : '当前为只读'}</span></header>
-    {!form ? <div className="dsw-alert">暂时无法读取配置。请确认插件已启用，并重新打开此页面。</div> : !writable && <div className="dsw-alert">当前连接不允许保存设置。请在拥有此插件的 dsh 桌面端编辑。</div>}
+    <header className="dsw-heading"><div><p className="dsw-eyebrow">DEEPSEEK WEB</p><h2>让网页配合你的工作方式</h2><p>连接已登录的浏览器，使用 dsh 的任务与工具。</p></div><span className="dsw-badge"><span className="dsw-dot" />{accessLabel}</span></header>
+    {!form || form.state.status === 'unavailable' ? <div className="dsw-alert">暂时无法读取配置。请确认插件已启用，并重新打开此页面。</div> : form.state.status !== 'ready' ? <div className="dsw-alert">正在读取设置，请稍候。</div> : !writable && <div className="dsw-alert">DSH 将此配置标记为只读，当前无法保存修改。</div>}
     {conflict && <div className="dsw-alert" role="alert">设置已在其他位置更新。请先重新载入，再编辑和保存。<button type="button" disabled={busy} onClick={reset}>重新载入并放弃草稿</button></div>}
     <div className="dsw-layout">
       <Section icon="↗" title="发送与显示" description="决定每轮消息如何发出" wide>{renderField('sendMode')}<div className="dsw-divider" />{renderField('liveThinking')}{renderField('compactionLanguage')}</Section>

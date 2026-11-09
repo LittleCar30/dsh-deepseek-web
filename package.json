@@ -1,7 +1,7 @@
 {
   "name": "dsh-deepseek-web-littlecar30",
   "description": "DeepSeek Harness 桌面版网页通道插件：通过真实 Edge/Chrome 使用 DeepSeek 免费网页版，支持可选 Kimi/GLM 审核和中文配置页。",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "type": "module",
   "engines": {
     "node": ">=22"

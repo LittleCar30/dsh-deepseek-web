@@ -1,6 +1,6 @@
 # 中文安装速查
 
-本项目 GitHub 发行版：**0.2.16**，已验证 dsh 桌面版 0.2.2-rc.1。npm 目前仍为 0.2.14；0.2.15 / 0.2.16 尚未上传 npm，等待维护者恢复双重验证。
+本项目 GitHub 发行版：**0.2.17**，已验证 dsh 桌面版 0.2.2-rc.1。npm 目前仍为 0.2.14；0.2.15 及后续版本尚未上传 npm，等待维护者恢复双重验证。
 
 ## 新用户：在桌面版输入发行包链接安装
 
@@ -10,7 +10,7 @@
 4. 选择 `deepseek-web`，在插件自动打开的 Edge 窗口登录 DeepSeek。
 
 ```text
-https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.16/dsh-deepseek-web-littlecar30-0.2.16.tgz
+https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.17/dsh-deepseek-web-littlecar30-0.2.17.tgz
 ```
 
 无需安装 Node.js、克隆源码或手改配置文件。安装包内已带 host/client 编译产物。
@@ -28,14 +28,15 @@ https://github.com/LittleCar30/dsh-deepseek-web/releases/download/v0.2.16/dsh-de
 
 ## 其他安装入口与常见问题
 
-- **GitHub 链接**：使用上面的 0.2.16 安装包链接。
+- **GitHub 链接**：使用上面的 0.2.17 安装包链接。
 - **本地安装包**：从 [Release](https://github.com/LittleCar30/dsh-deepseek-web/releases/latest) 下载 `.tgz`，
-  在「添加插件」输入框粘贴完整绝对路径，例如 `C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.16.tgz`。
+  在「添加插件」输入框粘贴完整绝对路径，例如 `C:\Users\你的用户名\Downloads\dsh-deepseek-web-littlecar30-0.2.17.tgz`。
 - **npm**：[发行页](https://www.npmjs.com/package/dsh-deepseek-web-littlecar30)，当前公开最新版为 0.2.14；安装新版请使用 GitHub 或本地安装包。
 - **不能安装 `dsh-deepseek-web`**：npm 上这个名字属于另一位作者，不是本项目；务必使用完整新名字或本项目 Release 链接。
 - **下载失败**：安装界面展开「查看安装详情」查看原因。npm 镜像可帮助下载依赖，不能代替访问 GitHub。
 - **没有「添加插件」入口**：更新 dsh 桌面版；本流程已对照 0.2.2-rc.1 的插件管理说明。手工 profile/CLI 见 [README](README.md#命令行--手动-profile进阶)。
 - **已安装但没生效**：确认点击过「立即启用」、没有同时启用旧包，并重启 dsh；插件页检查 `llm-deepseek-web` 的运行状态。
+- **本地配置页提示「当前连接不允许保存设置」**：0.2.15 / 0.2.16 对新版 DSH 表单存在只读误判，请升级 0.2.17 并重启；不需要改账号、登录或管理员权限。
 - **新建会话报 `tool-subagent-list-agents … /list-agents: never started`**：新版 DSH 已将 `list_agents` 合并到 `@deepseek-ai/dsh-tool-subagent-control` 主入口。备份 profile 的 `cordis.patch.yml`，在报错预设的 `delegation.config` 中删除 `name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'` 所在的旧插件行，保留主入口，再重启 DSH。只删除这条旧插件声明，不要清空整个预设。详见[验证记录](docs/COMPATIBILITY-2026-11-09.md#新建会话失败的配置修复)。
 
 ## 首次登录与模型选择
